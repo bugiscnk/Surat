@@ -8,6 +8,7 @@ export interface User {
   status: 'Aktif' | 'Nonaktif';
   jabatan: string;
   foto?: string;
+  password?: string;
 }
 
 export type SifatSurat = 'Biasa' | 'Penting' | 'Rahasia';

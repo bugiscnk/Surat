@@ -14,16 +14,37 @@ import PenggunaPage from './pages/Pengguna';
 
 export default function App() {
   // Session authentication state
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('sipadig_current_user');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [currentRole, setCurrentRole] = useState<UserRole>('Super Admin');
 
   // Application-wide reactive state initialized with Indonesian mock datasets
-  const [users, setUsers] = useState<User[]>(mockUsers);
-  const [suratMasuk, setSuratMasuk] = useState<SuratMasuk[]>(mockSuratMasuk);
-  const [suratKeluar, setSuratKeluar] = useState<SuratKeluar[]>(mockSuratKeluar);
-  const [disposisi, setDisposisi] = useState<Disposisi[]>(mockDisposisi);
-  const [auditTrail, setAuditTrail] = useState<AuditTrail[]>(mockAuditTrail);
-  const [notifications, setNotifications] = useState<Notifikasi[]>(mockNotifikasi);
+  const [users, setUsers] = useState<User[]>(() => {
+    const saved = localStorage.getItem('sipadig_users');
+    return saved ? JSON.parse(saved) : mockUsers;
+  });
+  const [suratMasuk, setSuratMasuk] = useState<SuratMasuk[]>(() => {
+    const saved = localStorage.getItem('sipadig_surat_masuk');
+    return saved ? JSON.parse(saved) : mockSuratMasuk;
+  });
+  const [suratKeluar, setSuratKeluar] = useState<SuratKeluar[]>(() => {
+    const saved = localStorage.getItem('sipadig_surat_keluar');
+    return saved ? JSON.parse(saved) : mockSuratKeluar;
+  });
+  const [disposisi, setDisposisi] = useState<Disposisi[]>(() => {
+    const saved = localStorage.getItem('sipadig_disposisi');
+    return saved ? JSON.parse(saved) : mockDisposisi;
+  });
+  const [auditTrail, setAuditTrail] = useState<AuditTrail[]>(() => {
+    const saved = localStorage.getItem('sipadig_audit_trail');
+    return saved ? JSON.parse(saved) : mockAuditTrail;
+  });
+  const [notifications, setNotifications] = useState<Notifikasi[]>(() => {
+    const saved = localStorage.getItem('sipadig_notifications');
+    return saved ? JSON.parse(saved) : mockNotifikasi;
+  });
 
   // Layout & Routing State
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -37,6 +58,39 @@ export default function App() {
   useEffect(() => {
     if (currentUser) {
       setCurrentRole(currentUser.role);
+    }
+  }, [currentUser]);
+
+  // Save states to localStorage
+  useEffect(() => {
+    localStorage.setItem('sipadig_users', JSON.stringify(users));
+  }, [users]);
+
+  useEffect(() => {
+    localStorage.setItem('sipadig_surat_masuk', JSON.stringify(suratMasuk));
+  }, [suratMasuk]);
+
+  useEffect(() => {
+    localStorage.setItem('sipadig_surat_keluar', JSON.stringify(suratKeluar));
+  }, [suratKeluar]);
+
+  useEffect(() => {
+    localStorage.setItem('sipadig_disposisi', JSON.stringify(disposisi));
+  }, [disposisi]);
+
+  useEffect(() => {
+    localStorage.setItem('sipadig_audit_trail', JSON.stringify(auditTrail));
+  }, [auditTrail]);
+
+  useEffect(() => {
+    localStorage.setItem('sipadig_notifications', JSON.stringify(notifications));
+  }, [notifications]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('sipadig_current_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('sipadig_current_user');
     }
   }, [currentUser]);
 

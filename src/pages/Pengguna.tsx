@@ -1,5 +1,5 @@
 import { useState, Dispatch, SetStateAction, FormEvent } from 'react';
-import { Plus, Search, User, Shield, CheckCircle, XCircle, Trash2, Edit2, Key, Info } from 'lucide-react';
+import { Plus, Search, User, Shield, CheckCircle, XCircle, Trash2, Edit2, Key, Info, AlertCircle, CheckCircle2, X } from 'lucide-react';
 import { User as UserType, UserRole } from '../types';
 import Modal from '../components/Modal';
 
@@ -21,6 +21,17 @@ export default function PenggunaPage({ users, setUsers }: PenggunaProps) {
   const [formJabatan, setFormJabatan] = useState('');
   const [formRole, setFormRole] = useState<UserRole>('Pelaksana');
   const [formStatus, setFormStatus] = useState<'Aktif' | 'Nonaktif'>('Aktif');
+  const [formPassword, setFormPassword] = useState('');
+
+  // Rich feedback states
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState<UserType | null>(null);
+
+  const triggerToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   // Filter users based on query
   const filteredUsers = users.filter(u => 
@@ -36,6 +47,7 @@ export default function PenggunaPage({ users, setUsers }: PenggunaProps) {
     setFormJabatan('');
     setFormRole('Pelaksana');
     setFormStatus('Aktif');
+    setFormPassword('');
     setIsAddEditModalOpen(true);
   };
 
@@ -46,13 +58,14 @@ export default function PenggunaPage({ users, setUsers }: PenggunaProps) {
     setFormJabatan(user.jabatan);
     setFormRole(user.role);
     setFormStatus(user.status);
+    setFormPassword(user.password || '');
     setIsAddEditModalOpen(true);
   };
 
   const handleSubmitForm = (e: FormEvent) => {
     e.preventDefault();
-    if (!formNama || !formNip || !formJabatan) {
-      alert('Mohon isi kolom nama lengkap, NIP, dan nama jabatan.');
+    if (!formNama.trim() || !formNip.trim() || !formJabatan.trim()) {
+      setFormError('Mohon isi kolom nama lengkap, NIP, dan nama jabatan.');
       return;
     }
 
@@ -60,40 +73,50 @@ export default function PenggunaPage({ users, setUsers }: PenggunaProps) {
       // Editing
       setUsers(prev => prev.map(u => u.id === selectedUser.id ? {
         ...u,
-        nama: formNama,
-        nip: formNip,
-        jabatan: formJabatan,
+        nama: formNama.trim(),
+        nip: formNip.trim(),
+        jabatan: formJabatan.trim(),
         role: formRole,
-        status: formStatus
+        status: formStatus,
+        password: formPassword || u.password || '123456'
       } : u));
+      triggerToast(`Profil pegawai ${formNama.trim()} berhasil diperbarui!`, 'success');
     } else {
       // Adding new
       const newUser: UserType = {
         id: `user-${Date.now()}`,
-        nama: formNama,
-        nip: formNip,
-        jabatan: formJabatan,
+        nama: formNama.trim(),
+        nip: formNip.trim(),
+        jabatan: formJabatan.trim(),
         role: formRole,
         status: formStatus,
+        password: formPassword || '123456',
         foto: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=256&auto=format&fit=crop'
       };
       setUsers(prev => [...prev, newUser]);
+      triggerToast(`Pegawai baru ${formNama.trim()} berhasil didaftarkan!`, 'success');
     }
 
     setIsAddEditModalOpen(false);
+    setFormError(null);
   };
 
-  const handleToggleStatus = (id: string, currentStatus: 'Aktif' | 'Nonaktif') => {
+  const handleToggleStatus = (id: string, currentStatus: 'Aktif' | 'Nonaktif', nama: string) => {
     const nextStatus = currentStatus === 'Aktif' ? 'Nonaktif' : 'Aktif';
-    if (confirm(`Apakah Anda yakin ingin merubah status pegawai ini menjadi ${nextStatus}?`)) {
-      setUsers(prev => prev.map(u => u.id === id ? { ...u, status: nextStatus } : u));
-    }
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, status: nextStatus } : u));
+    triggerToast(`Status akun ${nama} diubah menjadi ${nextStatus}.`, 'info');
   };
 
-  const handleDeleteUser = (id: string, nama: string) => {
-    if (confirm(`Apakah Anda yakin ingin menghapus akun pegawai ${nama}?`)) {
-      setUsers(prev => prev.filter(u => u.id !== id));
-    }
+  const handleDeleteUser = (user: UserType) => {
+    setDeleteConfirmUser(user);
+  };
+
+  const confirmDeleteUser = () => {
+    if (!deleteConfirmUser) return;
+    const { id, nama } = deleteConfirmUser;
+    setUsers(prev => prev.filter(u => u.id !== id));
+    triggerToast(`Akun pegawai ${nama} berhasil dihapus permanen.`, 'info');
+    setDeleteConfirmUser(null);
   };
 
   const getRoleBadgeColor = (role: UserRole) => {
@@ -190,7 +213,7 @@ export default function PenggunaPage({ users, setUsers }: PenggunaProps) {
                     <td className="py-4 px-3 text-center">
                       <button
                         id={`btn-toggle-user-status-${item.id}`}
-                        onClick={() => handleToggleStatus(item.id, item.status)}
+                        onClick={() => handleToggleStatus(item.id, item.status, item.nama)}
                         className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
                           item.status === 'Aktif' 
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-150 hover:bg-emerald-100' 
@@ -225,7 +248,7 @@ export default function PenggunaPage({ users, setUsers }: PenggunaProps) {
                         </button>
                         <button
                           id={`btn-delete-user-${item.id}`}
-                          onClick={() => handleDeleteUser(item.id, item.nama)}
+                          onClick={() => handleDeleteUser(item)}
                           disabled={item.id === 'user-1' || item.id === 'user-3'} // Prevent deleting super admin or director in demo
                           className="p-1.5 text-rose-500/70 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all disabled:opacity-30 disabled:hover:bg-transparent"
                           title="Hapus Pegawai"
@@ -246,11 +269,20 @@ export default function PenggunaPage({ users, setUsers }: PenggunaProps) {
       {/* Modal Add/Edit Form */}
       <Modal
         isOpen={isAddEditModalOpen}
-        onClose={() => setIsAddEditModalOpen(false)}
+        onClose={() => {
+          setIsAddEditModalOpen(false);
+          setFormError(null);
+        }}
         title={selectedUser ? 'Edit Profil Pegawai' : 'Tambah Akun Pegawai Baru'}
         size="md"
       >
         <form onSubmit={handleSubmitForm} className="space-y-4 text-left">
+          {formError && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-xl text-xs flex items-center gap-2 animate-in fade-in duration-200">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+              <span>{formError}</span>
+            </div>
+          )}
           
           <div>
             <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Nama Lengkap & Gelar</label>
@@ -284,6 +316,18 @@ export default function PenggunaPage({ users, setUsers }: PenggunaProps) {
               placeholder="Contoh: Kepala Subbagian Umum & Kepegawaian"
               value={formJabatan}
               onChange={(e) => setFormJabatan(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:bg-white font-semibold"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Kata Sandi Akun</label>
+            <input
+              id="form-user-password"
+              type="text"
+              placeholder="Masukkan kata sandi baru (contoh: 123456)"
+              value={formPassword}
+              onChange={(e) => setFormPassword(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:bg-white font-semibold"
             />
           </div>
@@ -338,6 +382,66 @@ export default function PenggunaPage({ users, setUsers }: PenggunaProps) {
 
         </form>
       </Modal>
+
+      {/* Modal: Custom Delete Confirmation */}
+      <Modal
+        isOpen={deleteConfirmUser !== null}
+        onClose={() => setDeleteConfirmUser(null)}
+        title="Konfirmasi Hapus Pengawai"
+        size="sm"
+      >
+        <div className="text-left space-y-4">
+          <p className="text-xs text-slate-600 leading-relaxed">
+            Apakah Anda yakin ingin menghapus akun pegawai <strong className="text-slate-800">{deleteConfirmUser?.nama}</strong> ({deleteConfirmUser?.jabatan})? Tindakan ini tidak dapat dibatalkan.
+          </p>
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-150">
+            <button
+              id="btn-cancel-delete-usr"
+              onClick={() => setDeleteConfirmUser(null)}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer"
+            >
+              Batal
+            </button>
+            <button
+              id="btn-confirm-delete-usr"
+              onClick={confirmDeleteUser}
+              className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer shadow-md shadow-rose-600/10"
+            >
+              Hapus Permanen
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Floating Action Feedback: Toast Notification */}
+      {toast && (
+        <div 
+          id="toast-notification-usr"
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl border text-xs font-medium animate-in slide-in-from-bottom-5 duration-300 ${
+            toast.type === 'success' 
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+              : toast.type === 'error'
+                ? 'bg-rose-50 border-rose-200 text-rose-800'
+                : 'bg-blue-50 border-blue-200 text-blue-800'
+          }`}
+        >
+          {toast.type === 'success' ? (
+            <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 shrink-0" />
+          ) : toast.type === 'error' ? (
+            <AlertCircle className="h-4.5 w-4.5 text-rose-600 shrink-0" />
+          ) : (
+            <Info className="h-4.5 w-4.5 text-blue-600 shrink-0" />
+          )}
+          <span>{toast.message}</span>
+          <button 
+            id="toast-close-btn-usr"
+            onClick={() => setToast(null)} 
+            className="ml-2 text-slate-400 hover:text-slate-600"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
     </div>
   );

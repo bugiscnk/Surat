@@ -8,7 +8,8 @@ export const mockUsers: User[] = [
     role: 'Super Admin',
     status: 'Aktif',
     jabatan: 'Kepala Bidang IT & Sistem Persuratan',
-    foto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop'
+    foto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop',
+    password: 'admin'
   },
   {
     id: 'user-2',
@@ -17,7 +18,8 @@ export const mockUsers: User[] = [
     role: 'Admin Persuratan',
     status: 'Aktif',
     jabatan: 'Staf Sekretariat & Registrasi',
-    foto: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=256&auto=format&fit=crop'
+    foto: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=256&auto=format&fit=crop',
+    password: 'admin'
   },
   {
     id: 'user-3',
@@ -26,7 +28,8 @@ export const mockUsers: User[] = [
     role: 'Pimpinan',
     status: 'Aktif',
     jabatan: 'Kepala Dinas Persuratan Digital',
-    foto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop'
+    foto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop',
+    password: 'pimpinan'
   },
   {
     id: 'user-4',
@@ -35,7 +38,8 @@ export const mockUsers: User[] = [
     role: 'Pelaksana',
     status: 'Aktif',
     jabatan: 'Kepala Subbagian Keuangan & Aset',
-    foto: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=256&auto=format&fit=crop'
+    foto: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=256&auto=format&fit=crop',
+    password: 'pelaksana'
   },
   {
     id: 'user-5',
@@ -44,7 +48,8 @@ export const mockUsers: User[] = [
     role: 'Pelaksana',
     status: 'Aktif',
     jabatan: 'Penyusun Administrasi Kepegawaian',
-    foto: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=256&auto=format&fit=crop'
+    foto: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=256&auto=format&fit=crop',
+    password: 'pelaksana'
   },
   {
     id: 'user-6',
@@ -53,7 +58,8 @@ export const mockUsers: User[] = [
     role: 'Pelaksana',
     status: 'Aktif',
     jabatan: 'Analid Sistem & Jaringan',
-    foto: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=256&auto=format&fit=crop'
+    foto: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=256&auto=format&fit=crop',
+    password: 'pelaksana'
   }
 ];
 

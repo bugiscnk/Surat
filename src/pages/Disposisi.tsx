@@ -11,7 +11,9 @@ import {
   ArrowRight,
   Send,
   CheckCircle2,
-  FileCheck
+  FileCheck,
+  X,
+  Info
 } from 'lucide-react';
 import { Disposisi, SuratMasuk, User, UserRole } from '../types';
 import Modal from '../components/Modal';
@@ -52,6 +54,16 @@ export default function DisposisiPage({
   const [instruksiText, setInstruksiText] = useState('');
   const [tenggatWaktuDate, setTenggatWaktuDate] = useState('');
 
+  // Custom feedback states
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [pimpinanFormError, setPimpinanFormError] = useState<string | null>(null);
+  const [pelaksanaFormError, setPelaksanaFormError] = useState<string | null>(null);
+
+  const triggerToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
   // Pelaksana filter
   const pelaksanaUsers = users.filter(u => u.role === 'Pelaksana' && u.status === 'Aktif');
 
@@ -69,8 +81,8 @@ export default function DisposisiPage({
   const handleCreateDisposition = (e: FormEvent) => {
     e.preventDefault();
     if (!disposisiFormOpenForLetterId) return;
-    if (selectedPelaksanaIds.length === 0 || !instruksiText || !tenggatWaktuDate) {
-      alert('Mohon isi semua data: Pilih minimal 1 pelaksana, ketik instruksi, dan pilih tenggat waktu.');
+    if (selectedPelaksanaIds.length === 0 || !instruksiText.trim() || !tenggatWaktuDate) {
+      setPimpinanFormError('Mohon isi semua data: Pilih minimal 1 pelaksana, ketik instruksi, dan pilih tenggat waktu.');
       return;
     }
 
@@ -82,7 +94,7 @@ export default function DisposisiPage({
       suratMasukId: disposisiFormOpenForLetterId,
       pengirimId: currentUserId,
       pelaksanaIds: selectedPelaksanaIds,
-      instruksi: instruksiText,
+      instruksi: instruksiText.trim(),
       tenggatWaktu: tenggatWaktuDate,
       status: 'Menunggu',
       tanggalDisposisi: new Date().toISOString().split('T')[0]
@@ -100,6 +112,9 @@ export default function DisposisiPage({
       'Pembuatan Disposisi',
       `Kepala Dinas menerbitkan instruksi disposisi kepada pelaksana [${pelaksanaNames}] dengan tenggat ${tenggatWaktuDate}. Instruksi: "${instruksiText}"`
     );
+
+    triggerToast('Disposisi berhasil diterbitkan ke Pelaksana!', 'success');
+    setPimpinanFormError(null);
 
     // Reset Form & Close Modal
     setSelectedPelaksanaIds([]);
@@ -120,13 +135,15 @@ export default function DisposisiPage({
       'Mulai Tindak Lanjut',
       `${aktorNama} mulai memproses tugas disposisi dan merubah status menjadi "Sedang Dikerjakan".`
     );
+
+    triggerToast('Tugas disposisi mulai dikerjakan!', 'info');
   };
 
   // Pelaksana: Complete task (In Progress -> Completed)
   const handleCompleteTaskSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!selectedDispToComplete || !completeCatatan) {
-      alert('Mohon ketik catatan laporan hasil tindak lanjut.');
+    if (!selectedDispToComplete || !completeCatatan.trim()) {
+      setPelaksanaFormError('Mohon ketik catatan laporan hasil tindak lanjut.');
       return;
     }
 
@@ -137,7 +154,7 @@ export default function DisposisiPage({
     setDisposisi(prev => prev.map(d => d.id === dispId ? { 
       ...d, 
       status: 'Selesai',
-      catatanBalasan: completeCatatan,
+      catatanBalasan: completeCatatan.trim(),
       dokumenBalasan: completeDokumen || 'Dokumen_Balasan_Selesai.pdf'
     } : d));
 
@@ -158,6 +175,9 @@ export default function DisposisiPage({
       'Tugas Disposisi Selesai',
       `${aktorNama} telah merampungkan tugas disposisi. Laporan: "${completeCatatan}". Dokumen balasan terunggah: ${completeDokumen || 'Dokumen_Balasan_Selesai.pdf'}`
     );
+
+    triggerToast('Tindak lanjut disposisi berhasil diselesaikan!', 'success');
+    setPelaksanaFormError(null);
 
     // Reset Form & Close Modal
     setSelectedDispToComplete(null);
@@ -473,6 +493,12 @@ export default function DisposisiPage({
       >
         {disposisiFormOpenForLetterId && (
           <form onSubmit={handleCreateDisposition} className="space-y-5 text-left">
+            {pimpinanFormError && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-xl text-xs flex items-center gap-2 animate-in fade-in duration-200">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                <span>{pimpinanFormError}</span>
+              </div>
+            )}
             <div>
               <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-bold">Perihal Surat Terpilih</span>
               <p className="text-xs font-bold text-slate-800 mt-0.5">
@@ -571,6 +597,12 @@ export default function DisposisiPage({
       >
         {selectedDispToComplete && (
           <form onSubmit={handleCompleteTaskSubmit} className="space-y-4 text-left">
+            {pelaksanaFormError && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-xl text-xs flex items-center gap-2 animate-in fade-in duration-200">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                <span>{pelaksanaFormError}</span>
+              </div>
+            )}
             <div>
               <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-bold">Tugas Referensi</span>
               <p className="text-xs font-bold text-slate-800 mt-0.5">
@@ -626,6 +658,36 @@ export default function DisposisiPage({
           </form>
         )}
       </Modal>
+
+      {/* Floating Action Feedback: Toast Notification */}
+      {toast && (
+        <div 
+          id="toast-notification-disp"
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl border text-xs font-medium animate-in slide-in-from-bottom-5 duration-300 ${
+            toast.type === 'success' 
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+              : toast.type === 'error'
+                ? 'bg-rose-50 border-rose-200 text-rose-800'
+                : 'bg-blue-50 border-blue-200 text-blue-800'
+          }`}
+        >
+          {toast.type === 'success' ? (
+            <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 shrink-0" />
+          ) : toast.type === 'error' ? (
+            <AlertCircle className="h-4.5 w-4.5 text-rose-600 shrink-0" />
+          ) : (
+            <Info className="h-4.5 w-4.5 text-blue-600 shrink-0" />
+          )}
+          <span>{toast.message}</span>
+          <button 
+            id="toast-close-btn-disp"
+            onClick={() => setToast(null)} 
+            className="ml-2 text-slate-400 hover:text-slate-600"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
     </div>
   );

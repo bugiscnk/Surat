@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Search, SlidersHorizontal, ChevronDown, ChevronUp, FileText, Download, Eye, Calendar, RefreshCcw } from 'lucide-react';
+import { Search, SlidersHorizontal, ChevronDown, ChevronUp, FileText, Download, Eye, Calendar, RefreshCcw, FolderOpen, Upload } from 'lucide-react';
 import { SuratMasuk, SuratKeluar, SifatSurat, KlasifikasiSurat } from '../types';
+import PusatUpload from '../components/PusatUpload';
 
 interface ArsipProps {
   suratMasuk: SuratMasuk[];
@@ -9,6 +10,7 @@ interface ArsipProps {
 }
 
 export default function ArsipPage({ suratMasuk, suratKeluar, onViewLetter }: ArsipProps) {
+  const [subTab, setSubTab] = useState<'arsip' | 'upload'>('arsip');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(true);
   
@@ -95,8 +97,40 @@ export default function ArsipPage({ suratMasuk, suratKeluar, onViewLetter }: Ars
   return (
     <div className="space-y-6 text-left max-w-5xl mx-auto">
       
-      {/* Smart central search input banner */}
-      <div className="bg-white border border-slate-200 shadow-sm p-6 rounded-3xl space-y-4">
+      {/* Sub-tab switcher */}
+      <div className="flex border-b border-slate-200">
+        <button
+          id="btn-subtab-arsip"
+          onClick={() => setSubTab('arsip')}
+          className={`flex items-center gap-2 px-5 py-3 border-b-2 text-xs font-bold transition-all cursor-pointer ${
+            subTab === 'arsip'
+              ? 'border-emerald-600 text-emerald-750 font-bold font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
+          }`}
+        >
+          <FolderOpen className="h-4 w-4" />
+          <span>Arsip Surat Digital</span>
+        </button>
+        <button
+          id="btn-subtab-upload"
+          onClick={() => setSubTab('upload')}
+          className={`flex items-center gap-2 px-5 py-3 border-b-2 text-xs font-bold transition-all cursor-pointer ${
+            subTab === 'upload'
+              ? 'border-emerald-600 text-emerald-750 font-bold font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
+          }`}
+        >
+          <Upload className="h-4 w-4" />
+          <span>Pusat Berkas & Template (PDF / Word)</span>
+        </button>
+      </div>
+
+      {subTab === 'upload' ? (
+        <PusatUpload />
+      ) : (
+        <>
+          {/* Smart central search input banner */}
+          <div className="bg-white border border-slate-200 shadow-sm p-6 rounded-3xl space-y-4">
         <div className="relative">
           <input
             id="smart-search-archive-input"
@@ -312,6 +346,8 @@ export default function ArsipPage({ suratMasuk, suratKeluar, onViewLetter }: Ars
         )}
 
       </div>
+      </>
+      )}
 
     </div>
   );

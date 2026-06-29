@@ -23,6 +23,10 @@ export default function Login({ onLogin, users }: LoginProps) {
 
     const matchedUser = users.find(u => u.nip === nip && u.status === 'Aktif');
     if (matchedUser) {
+      if (matchedUser.password && matchedUser.password !== password) {
+        setError('Kata sandi yang Anda masukkan salah.');
+        return;
+      }
       onLogin(matchedUser);
     } else {
       setError('NIP tidak terdaftar atau akun dinonaktifkan. (Gunakan Fitur Demo di bawah untuk masuk cepat)');

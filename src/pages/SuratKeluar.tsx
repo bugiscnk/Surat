@@ -8,7 +8,10 @@ import {
   ArrowRight,
   History,
   Send,
-  Info
+  Info,
+  AlertCircle,
+  CheckCircle2,
+  X
 } from 'lucide-react';
 import { SuratKeluar, SifatSurat, KlasifikasiSurat, UserRole, User } from '../types';
 import Modal from '../components/Modal';
@@ -39,7 +42,7 @@ export default function SuratKeluarPage({
   // Selected letter for viewing
   const [selectedLetterId, setSelectedLetterId] = useState<string | null>(null);
 
-  // New letter form modal state
+  // New letter form modal state & feedback
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newNoSurat, setNewNoSurat] = useState('');
   const [newTglSurat, setNewTglSurat] = useState('');
@@ -49,6 +52,16 @@ export default function SuratKeluarPage({
   const [newKlasifikasi, setNewKlasifikasi] = useState<KlasifikasiSurat>('Umum');
   const [newTembusan, setNewTembusan] = useState('');
   const [newLampiranName, setNewLampiranName] = useState('');
+
+  // Floating notifications & modal feedback states
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [deleteConfirmLetter, setDeleteConfirmLetter] = useState<SuratKeluar | null>(null);
+
+  const triggerToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   // Filtering data
   const filteredData = suratKeluar.filter((item) => {
@@ -67,32 +80,40 @@ export default function SuratKeluarPage({
   const selectedLetter = suratKeluar.find(l => l.id === selectedLetterId);
 
   const handleAddLetter = (actionType: 'Draft' | 'Kirim') => {
-    if (!newNoSurat || !newTujuan || !newPerihal) {
-      alert('Mohon isi kolom nomor surat, tujuan surat, dan perihal.');
+    if (!newNoSurat.trim() || !newTujuan.trim() || !newPerihal.trim()) {
+      setFormError('Mohon isi kolom nomor surat, tujuan surat, dan perihal.');
       return;
     }
 
     const newLetter: SuratKeluar = {
       id: `sk-${Date.now()}`,
-      nomorSurat: newNoSurat,
+      nomorSurat: newNoSurat.trim(),
       tanggalSurat: newTglSurat || new Date().toISOString().split('T')[0],
-      tujuan: newTujuan,
-      perihal: newPerihal,
+      tujuan: newTujuan.trim(),
+      perihal: newPerihal.trim(),
       sifat: newSifat,
       klasifikasi: newKlasifikasi,
       status: actionType === 'Kirim' ? 'Dikirim' : 'Draft',
-      tembusan: newTembusan || undefined,
+      tembusan: newTembusan.trim() || undefined,
       lampiran: newLampiranName || undefined
     };
 
     setSuratKeluar(prev => [newLetter, ...prev]);
     setIsAddModalOpen(false);
+    setFormError(null);
 
     // Add Audit Log
     onAddAuditLog(
       newLetter.id,
       actionType === 'Kirim' ? 'Registrasi & Pengiriman' : 'Registrasi Draf Keluar',
       `Mendaftarkan surat keluar baru nomor ${newLetter.nomorSurat} ditujukan ke ${newLetter.tujuan}. Status: ${newLetter.status}`
+    );
+
+    triggerToast(
+      actionType === 'Kirim' 
+        ? `Surat keluar ${newLetter.nomorSurat} berhasil disimpan dan dikirim!`
+        : `Surat keluar draf ${newLetter.nomorSurat} berhasil disimpan!`,
+      'success'
     );
 
     // Reset Form
@@ -106,13 +127,20 @@ export default function SuratKeluarPage({
     setNewLampiranName('');
   };
 
-  const handleDeleteLetter = (id: string, nomor: string) => {
-    if (confirm(`Apakah Anda yakin ingin menghapus draf surat keluar nomor ${nomor}?`)) {
-      setSuratKeluar(prev => prev.filter(l => l.id !== id));
-      if (selectedLetterId === id) {
-        setSelectedLetterId(null);
-      }
+  const handleDeleteLetter = (letter: SuratKeluar) => {
+    setDeleteConfirmLetter(letter);
+  };
+
+  const confirmDeleteLetter = () => {
+    if (!deleteConfirmLetter) return;
+    const { id, nomorSurat } = deleteConfirmLetter;
+
+    setSuratKeluar(prev => prev.filter(l => l.id !== id));
+    if (selectedLetterId === id) {
+      setSelectedLetterId(null);
     }
+    triggerToast(`Surat keluar draf nomor ${nomorSurat} berhasil dihapus.`, 'info');
+    setDeleteConfirmLetter(null);
   };
 
   const handleSendLetter = (letter: SuratKeluar) => {
@@ -122,6 +150,7 @@ export default function SuratKeluarPage({
       'Pengiriman Resmi',
       `Surat resmi Keluar nomor ${letter.nomorSurat} telah berhasil dikirimkan ke tujuan: ${letter.tujuan}.`
     );
+    triggerToast(`Surat nomor ${letter.nomorSurat} berhasil dikirim ke tujuan!`, 'success');
   };
 
   const getSifatBadgeColor = (sifat: SifatSurat) => {
@@ -278,7 +307,7 @@ export default function SuratKeluarPage({
                           {canAddLetter && (
                             <button
                               id={`btn-delete-sk-${item.id}`}
-                              onClick={() => handleDeleteLetter(item.id, item.nomorSurat)}
+                              onClick={() => handleDeleteLetter(item)}
                               className="text-rose-600 hover:text-rose-700 p-1 rounded-lg hover:bg-rose-50 transition-all"
                               title="Hapus"
                             >
@@ -382,11 +411,20 @@ export default function SuratKeluarPage({
       {/* Modal: Add Outgoing Letter */}
       <Modal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setFormError(null);
+        }}
         title="Registrasi Surat Keluar Baru"
         size="md"
       >
         <div className="space-y-4 text-left">
+          {formError && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-xl text-xs flex items-center gap-2 animate-in fade-in duration-200">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+              <span>{formError}</span>
+            </div>
+          )}
           
           <div>
             <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Nomor Surat Resmi</label>
@@ -479,15 +517,37 @@ export default function SuratKeluarPage({
 
           {/* Lampiran */}
           <div>
-            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Nama Lampiran (Mock PDF)</label>
-            <input
-              id="form-sk-lampiran"
-              type="text"
-              placeholder="Masukkan nama berkas lampiran jika ada"
-              value={newLampiranName}
-              onChange={(e) => setNewLampiranName(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3.5 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:bg-white font-semibold"
-            />
+            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Dokumen Lampiran (PDF / Word)</label>
+            <div className="border border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-emerald-500/40 transition-colors bg-slate-50 relative flex flex-col items-center justify-center gap-2">
+              <input
+                id="form-sk-lampiran-file"
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    setNewLampiranName(e.target.files[0].name);
+                  }
+                }}
+                className="hidden"
+              />
+              <input
+                id="form-sk-lampiran-input"
+                type="text"
+                placeholder="Nama file pendukung (contoh: Surat_Undangan.docx)"
+                value={newLampiranName}
+                onChange={(e) => setNewLampiranName(e.target.value)}
+                className="w-full bg-transparent border-none text-slate-800 text-xs text-center focus:outline-none placeholder-slate-400 font-semibold"
+              />
+              <button
+                id="btn-select-file-sk"
+                type="button"
+                onClick={() => document.getElementById('form-sk-lampiran-file')?.click()}
+                className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-50 transition-all cursor-pointer"
+              >
+                Pilih Berkas PDF / Word
+              </button>
+              <span className="block text-[9px] text-slate-400 mt-1 font-medium">Anda dapat memilih berkas nyata atau mengetikkan nama berkas secara manual.</span>
+            </div>
           </div>
 
           {/* Actions */}
@@ -513,6 +573,66 @@ export default function SuratKeluarPage({
 
         </div>
       </Modal>
+
+      {/* Modal: Custom Delete Confirmation */}
+      <Modal
+        isOpen={deleteConfirmLetter !== null}
+        onClose={() => setDeleteConfirmLetter(null)}
+        title="Konfirmasi Hapus"
+        size="sm"
+      >
+        <div className="text-left space-y-4">
+          <p className="text-xs text-slate-600 leading-relaxed">
+            Apakah Anda yakin ingin menghapus draf surat keluar nomor <strong className="text-slate-800">{deleteConfirmLetter?.nomorSurat}</strong> ditujukan ke <strong className="text-slate-800">{deleteConfirmLetter?.tujuan}</strong>? Tindakan ini tidak dapat dibatalkan.
+          </p>
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-150">
+            <button
+              id="btn-cancel-delete-sk"
+              onClick={() => setDeleteConfirmLetter(null)}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer"
+            >
+              Batal
+            </button>
+            <button
+              id="btn-confirm-delete-sk"
+              onClick={confirmDeleteLetter}
+              className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer shadow-md shadow-rose-600/10"
+            >
+              Hapus Permanen
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Floating Action Feedback: Toast Notification */}
+      {toast && (
+        <div 
+          id="toast-notification-sk"
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl border text-xs font-medium animate-in slide-in-from-bottom-5 duration-300 ${
+            toast.type === 'success' 
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+              : toast.type === 'error'
+                ? 'bg-rose-50 border-rose-200 text-rose-800'
+                : 'bg-blue-50 border-blue-200 text-blue-800'
+          }`}
+        >
+          {toast.type === 'success' ? (
+            <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 shrink-0" />
+          ) : toast.type === 'error' ? (
+            <AlertCircle className="h-4.5 w-4.5 text-rose-600 shrink-0" />
+          ) : (
+            <Info className="h-4.5 w-4.5 text-blue-600 shrink-0" />
+          )}
+          <span>{toast.message}</span>
+          <button 
+            id="toast-close-btn-sk"
+            onClick={() => setToast(null)} 
+            className="ml-2 text-slate-400 hover:text-slate-600"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
     </div>
   );
