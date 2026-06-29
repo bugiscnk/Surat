@@ -1,151 +1,146 @@
 import React, { useState } from 'react';
-import { Mail, ShieldCheck, ArrowRight, Eye, EyeOff, Lock, User as UserIcon } from 'lucide-react';
-import { User, UserRole } from '../types';
+import { Shield, Key, AlertCircle, Info } from 'lucide-react';
+import { User } from '../types';
 
 interface LoginProps {
-  onLogin: (user: User) => void;
   users: User[];
+  onLoginSuccess: (user: User) => void;
 }
 
-export default function Login({ onLogin, users }: LoginProps) {
-  const [nip, setNip] = useState('');
-  const [password, setPassword] = useState('');
-  const [selectedDemoUser, setSelectedDemoUser] = useState<string>('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
+export default function Login({ users, onLoginSuccess }: LoginProps) {
+  const [usernameInput, setUsernameInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  // Filter users that are "Aktif"
+  const activeUsers = users.filter(u => u.status === 'Aktif');
+
+  const handleDemoLogin = (user: User) => {
+    onLoginSuccess(user);
+  };
+
+  const handleCustomLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nip.trim()) {
-      setError('NIP atau Username tidak boleh kosong.');
+    if (!usernameInput.trim() || !passwordInput.trim()) {
+      setError('Mohon isi NIP / nama pengguna dan password.');
       return;
     }
 
-    const matchedUser = users.find(u => u.nip === nip && u.status === 'Aktif');
-    if (matchedUser) {
-      if (matchedUser.password && matchedUser.password !== password) {
-        setError('Kata sandi yang Anda masukkan salah.');
-        return;
-      }
-      onLogin(matchedUser);
-    } else {
-      setError('NIP tidak terdaftar atau akun dinonaktifkan. (Gunakan Fitur Demo di bawah untuk masuk cepat)');
-    }
-  };
+    // Try finding by NIP or nama
+    const foundUser = activeUsers.find(
+      u => (u.nip === usernameInput.trim() || u.nama.toLowerCase().includes(usernameInput.toLowerCase())) &&
+           (u.password === passwordInput || (!u.password && passwordInput === '123456'))
+    );
 
-  const handleDemoLogin = (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    if (user) {
-      onLogin(user);
+    if (foundUser) {
+      onLoginSuccess(foundUser);
+    } else {
+      setError('NIP / Nama atau Password salah atau akun Anda dinonaktifkan.');
     }
   };
 
   return (
-    <div className="min-h-screen bg-bg-deep text-slate-800 flex items-center justify-center relative overflow-hidden px-4">
-      {/* Background Animated Glows */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-emerald-500/10 blur-[120px] animate-glow-1 z-0" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-teal-500/10 blur-[120px] animate-glow-2 z-0" />
-
-      {/* Login Box */}
-      <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-3xl p-8 shadow-2xl relative z-10">
-        <div className="text-center mb-8">
-          <div className="inline-flex p-3.5 bg-gradient-to-tr from-emerald-500 to-emerald-600 rounded-2xl text-white shadow-xl shadow-emerald-500/10 mb-4">
-            <Mail className="h-6 w-6 animate-pulse" />
+    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+      
+      {/* Container */}
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col p-8 space-y-6 text-left">
+        
+        {/* Brand Header */}
+        <div className="text-center space-y-2">
+          <div className="inline-flex h-12 w-12 bg-emerald-500 text-white rounded-2xl items-center justify-center text-2xl shadow-lg shadow-emerald-500/25">
+            ✉️
           </div>
-          <h2 className="font-display font-extrabold text-2xl tracking-tight text-slate-900">
-            SIPERDI
-          </h2>
-          <p className="text-xs font-mono text-slate-400 uppercase tracking-widest mt-1">Sistem Persuratan Digital</p>
-          <p className="text-slate-500 text-xs mt-3">Silakan masuk menggunakan NIP resmi instansi Anda.</p>
+          <h2 className="text-lg font-extrabold tracking-tight text-slate-800">SISTEM E-DISPOSISI</h2>
+          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Tata Usaha & Kearsipan Digital</p>
         </div>
 
         {error && (
-          <div className="mb-6 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs text-center font-semibold">
-            {error}
+          <div className="bg-rose-50 border border-rose-100 p-3.5 rounded-xl text-xs text-rose-700 flex items-center gap-2 animate-in fade-in duration-200">
+            <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleFormSubmit} className="space-y-4">
-          <div>
-            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-2">NIP Pegawai</label>
-            <div className="relative">
-              <input
-                id="login-nip-input"
-                type="text"
-                placeholder="Contoh: 19880415..."
-                value={nip}
-                onChange={(e) => {
-                  setNip(e.target.value);
-                  setError('');
-                }}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500/20 transition-all shadow-inner"
-              />
-              <UserIcon className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-2">Kata Sandi</label>
-            <div className="relative">
-              <input
-                id="login-password-input"
-                type={showPassword ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setError('');
-                }}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-10 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500/20 transition-all shadow-inner"
-              />
-              <Lock className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
-              <button
-                id="btn-toggle-password"
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-
-          <button
-            id="btn-submit-login"
-            type="submit"
-            className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-semibold text-xs py-3 rounded-xl shadow-lg shadow-emerald-600/10 flex items-center justify-center gap-2 group transition-all duration-300 mt-6 cursor-pointer"
-          >
-            <span>Masuk Sistem</span>
-            <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-          </button>
-        </form>
-
-        {/* DEMO BYPASS SECTION (User requested and crucial for testing) */}
-        <div className="mt-8 pt-6 border-t border-slate-100 text-left">
-          <div className="flex items-center gap-2 mb-3 text-emerald-600 font-bold">
-            <ShieldCheck className="h-4 w-4 shrink-0" />
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider">Demo / Sandbox Login</span>
-          </div>
-          <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
-            Aplikasi ini berjalan dalam mode demo frontend. Pilih salah satu profil siap pakai di bawah untuk masuk instan sesuai role masing-masing:
-          </p>
-
+        {/* Demo fast click profiles */}
+        <div className="space-y-2.5">
+          <span className="text-[10px] text-slate-400 font-mono font-bold uppercase tracking-wider block">Pilih Akun Simulasi Cepat:</span>
+          
           <div className="grid grid-cols-2 gap-2">
-            {users.map((u) => (
+            {activeUsers.slice(0, 4).map((u) => (
               <button
-                id={`demo-login-${u.id}`}
                 key={u.id}
-                type="button"
-                onClick={() => handleDemoLogin(u.id)}
-                className="text-left p-2.5 bg-slate-50 hover:bg-emerald-50/50 border border-slate-200 hover:border-emerald-350 rounded-xl transition-all flex flex-col gap-0.5 shadow-sm"
+                id={`btn-demo-login-${u.id}`}
+                onClick={() => handleDemoLogin(u)}
+                className="flex items-center gap-2.5 p-2 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 border border-slate-150 rounded-2xl transition-all text-left cursor-pointer group"
               >
-                <span className="text-[10px] font-bold text-slate-700 truncate">{u.nama.split(',')[0]}</span>
-                <span className="text-[9px] font-mono text-emerald-600 font-bold tracking-wide uppercase truncate">{u.role}</span>
+                <img 
+                  src={u.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces"} 
+                  alt={u.nama} 
+                  className="h-7 w-7 rounded-full object-cover shrink-0 ring-2 ring-transparent group-hover:ring-emerald-500/10"
+                />
+                <div className="min-w-0">
+                  <p className="text-[10.5px] font-bold text-slate-700 truncate group-hover:text-emerald-800 leading-snug">{u.nama.split(',')[0]}</p>
+                  <span className="text-[8.5px] font-mono font-bold text-slate-400 uppercase tracking-wide block truncate group-hover:text-emerald-600">{u.role}</span>
+                </div>
               </button>
             ))}
           </div>
         </div>
+
+        {/* Divider */}
+        <div className="relative flex py-1.5 items-center">
+          <div className="flex-grow border-t border-slate-150"></div>
+          <span className="flex-shrink mx-3 text-[10px] text-slate-400 font-mono font-bold uppercase">Atau Login Manual</span>
+          <div className="flex-grow border-t border-slate-150"></div>
+        </div>
+
+        {/* Manual Input Form */}
+        <form onSubmit={handleCustomLogin} className="space-y-4">
+          <div>
+            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">NIP atau Nama Lengkap</label>
+            <input
+              id="login-username-input"
+              type="text"
+              placeholder="Contoh: 19851012..."
+              value={usernameInput}
+              onChange={(e) => setUsernameInput(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:ring-1 focus:ring-emerald-500/10"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Password Akun</label>
+            <div className="relative">
+              <Key className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+              <input
+                id="login-password-input"
+                type="password"
+                placeholder="Masukkan password akun Anda"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl py-2.5 pl-10 pr-4 text-xs font-semibold outline-none focus:ring-1 focus:ring-emerald-500/10"
+              />
+            </div>
+          </div>
+
+          <button
+            id="btn-login-submit"
+            type="submit"
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black py-3 rounded-xl transition-all shadow-md shadow-emerald-600/15 cursor-pointer text-center"
+          >
+            Masuk ke Aplikasi
+          </button>
+        </form>
+
+        <div className="text-center">
+          <span className="text-[9px] text-slate-400 font-mono font-semibold uppercase flex items-center justify-center gap-1">
+            <Shield className="h-3 w-3" />
+            <span>Koneksi Enkripsi Sesi Terjamin Aman</span>
+          </span>
+        </div>
+
       </div>
+
     </div>
   );
 }

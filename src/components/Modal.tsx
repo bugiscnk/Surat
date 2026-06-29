@@ -1,73 +1,50 @@
-import React, { useEffect } from 'react';
+import React, { ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
-export default function Modal({
-  isOpen,
-  onClose,
-  title,
-  children,
-  size = 'md'
-}: ModalProps) {
-  
-  // Close on Escape key
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
-    }
-    return () => {
-      document.body.style.overflow = '';
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, onClose]);
-
+export default function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
   if (!isOpen) return null;
 
   const sizeClasses = {
     sm: 'max-w-md',
-    md: 'max-w-xl',
-    lg: 'max-w-3xl',
-    xl: 'max-w-5xl'
+    md: 'max-w-2xl',
+    lg: 'max-w-4xl',
+    xl: 'max-w-6xl'
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Dark Blur Overlay */}
+      {/* Backdrop */}
       <div 
+        className="fixed inset-0 bg-slate-900/45 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
         onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
       />
-
-      {/* Modal Box */}
+      
+      {/* Modal Container */}
       <div 
-        className={`w-full ${sizeClasses[size]} glass-panel border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative z-10 flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200`}
+        className={`relative bg-white w-full ${sizeClasses[size]} rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden max-h-[90vh] z-10 transition-all animate-in zoom-in-95 duration-200`}
       >
         {/* Header */}
-        <div className="h-16 flex items-center justify-between px-6 border-b border-slate-800/80 bg-slate-950/20">
-          <h3 className="font-display font-bold text-slate-200 tracking-wide">{title}</h3>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
+          <h3 className="text-sm font-bold text-slate-800 tracking-tight">{title}</h3>
           <button
-            id="modal-close-button"
+            id={`btn-close-modal-${title.toLowerCase().replace(/\s+/g, '-')}`}
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
-            title="Tutup"
+            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-xl transition-all"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4.5 w-4.5" />
           </button>
         </div>
 
-        {/* Content (Scrollable) */}
-        <div className="flex-1 overflow-y-auto p-6 text-slate-300">
+        {/* Content */}
+        <div className="p-6 overflow-y-auto space-y-4">
           {children}
         </div>
       </div>

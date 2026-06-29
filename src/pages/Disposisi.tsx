@@ -1,34 +1,35 @@
-import { useState, Dispatch, SetStateAction, FormEvent } from 'react';
+import React, { useState, FormEvent } from 'react';
 import { 
-  ClipboardList, 
-  Clock, 
-  CheckCircle, 
-  Plus, 
-  UserCheck, 
+  Inbox, 
+  User as UserIcon, 
   Calendar, 
   AlertCircle, 
-  FileText, 
-  ArrowRight,
-  Send,
-  CheckCircle2,
+  CheckCircle, 
+  Clock, 
+  ArrowRight, 
+  Send, 
+  CheckCircle2, 
   FileCheck,
   X,
-  Info
+  Info,
+  FileText,
+  Search,
+  Filter,
+  Layers
 } from 'lucide-react';
 import { Disposisi, SuratMasuk, User, UserRole } from '../types';
 import Modal from '../components/Modal';
 
 interface DisposisiProps {
   disposisi: Disposisi[];
-  setDisposisi: Dispatch<SetStateAction<Disposisi[]>>;
+  setDisposisi: React.Dispatch<React.SetStateAction<Disposisi[]>>;
   suratMasuk: SuratMasuk[];
-  setSuratMasuk: Dispatch<SetStateAction<SuratMasuk[]>>;
+  setSuratMasuk: React.Dispatch<React.SetStateAction<SuratMasuk[]>>;
   users: User[];
-  currentRole: UserRole;
   currentUserId: string;
-  onAddAuditLog: (suratId: string, action: string, description: string) => void;
-  disposisiFormOpenForLetterId: string | null;
-  setDisposisiFormOpenForLetterId: (id: string | null) => void;
+  currentRole: UserRole;
+  onAddAuditLog: (action: string, description: string) => void;
+  onTriggerNotification: (userId: string, title: string, message: string) => void;
 }
 
 export default function DisposisiPage({
@@ -37,22 +38,32 @@ export default function DisposisiPage({
   suratMasuk,
   setSuratMasuk,
   users,
-  currentRole,
   currentUserId,
+  currentRole,
   onAddAuditLog,
-  disposisiFormOpenForLetterId,
-  setDisposisiFormOpenForLetterId
+  onTriggerNotification
 }: DisposisiProps) {
-  
-  // State for completing a task
+
+  // Multi-tab design: Tugas Disposisi vs Pusat Berkas Disposisi
+  const [activeSubTab, setActiveSubTab] = useState<'tugas' | 'berkas'>('tugas');
+
+  // Search/Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('Semua');
+
+  // Modal form states
+  const [disposisiFormOpenForLetterId, setDisposisiFormOpenForLetterId] = useState<string | null>(null);
+  const [selectedPelaksanaIds, setSelectedPelaksanaIds] = useState<string[]>([]);
+  const [instruksiText, setInstruksiText] = useState('');
+  const [tenggatWaktuDate, setTenggatWaktuDate] = useState('');
+
+  // Pelaksana Response / Complete Task states
   const [selectedDispToComplete, setSelectedDispToComplete] = useState<Disposisi | null>(null);
   const [completeCatatan, setCompleteCatatan] = useState('');
   const [completeDokumen, setCompleteDokumen] = useState('');
 
-  // State for Pimpinan form
-  const [selectedPelaksanaIds, setSelectedPelaksanaIds] = useState<string[]>([]);
-  const [instruksiText, setInstruksiText] = useState('');
-  const [tenggatWaktuDate, setTenggatWaktuDate] = useState('');
+  // Selected item details
+  const [selectedDispDetailsId, setSelectedDispDetailsId] = useState<string | null>(null);
 
   // Custom feedback states
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -64,20 +75,16 @@ export default function DisposisiPage({
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Pelaksana filter
+  // Pelaksana user filtering
   const pelaksanaUsers = users.filter(u => u.role === 'Pelaksana' && u.status === 'Aktif');
 
-  // Kanban Categories for Pimpinan
-  // Columns:
-  // 1. "Menunggu Disposisi": Incoming letters with status 'Diteruskan' (needs assignment)
-  // 2. "Dalam Pengerjaan": Active dispositions (status 'Menunggu' or 'Sedang Dikerjakan')
-  // 3. "Selesai": Completed dispositions (status 'Selesai')
-  
-  const waitingLetters = suratMasuk.filter(s => s.status === 'Diteruskan');
-  const activeDisposisi = disposisi.filter(d => d.status === 'Menunggu' || d.status === 'Sedang Dikerjakan');
-  const completedDisposisi = disposisi.filter(d => d.status === 'Selesai');
+  // Helper: Get user details
+  const getUserById = (id: string) => users.find(u => u.id === id);
 
-  // Submit Disposition from Pimpinan
+  // Helper: Get letter details
+  const getLetterById = (id: string) => suratMasuk.find(l => l.id === id);
+
+  // 1. Pimpinan: Create Disposition
   const handleCreateDisposition = (e: FormEvent) => {
     e.preventDefault();
     if (!disposisiFormOpenForLetterId) return;
@@ -85,9 +92,6 @@ export default function DisposisiPage({
       setPimpinanFormError('Mohon isi semua data: Pilih minimal 1 pelaksana, ketik instruksi, dan pilih tenggat waktu.');
       return;
     }
-
-    const targetLetter = suratMasuk.find(s => s.id === disposisiFormOpenForLetterId);
-    if (!targetLetter) return;
 
     const newDisp: Disposisi = {
       id: `disp-${Date.now()}`,
@@ -100,18 +104,26 @@ export default function DisposisiPage({
       tanggalDisposisi: new Date().toISOString().split('T')[0]
     };
 
-    // Update state
-    setDisposisi(prev => [newDisp, ...prev]);
-    // Change letter status to 'Didisposisikan'
-    setSuratMasuk(prev => prev.map(s => s.id === disposisiFormOpenForLetterId ? { ...s, status: 'Didisposisikan' } : s));
-    
-    // Add Audit Log
-    const pelaksanaNames = selectedPelaksanaIds.map(id => users.find(u => u.id === id)?.nama.split(',')[0]).join(', ');
+    setDisposisi(prev => [...prev, newDisp]);
+
+    // Update Surat Masuk status to 'Disposisi'
+    setSuratMasuk(prev => prev.map(s => s.id === disposisiFormOpenForLetterId ? { ...s, status: 'Disposisi' } : s));
+
+    // Audit Log & Notifications
+    const pelaksanaNames = selectedPelaksanaIds.map(pid => getUserById(pid)?.nama || '').join(', ');
     onAddAuditLog(
-      disposisiFormOpenForLetterId,
-      'Pembuatan Disposisi',
-      `Kepala Dinas menerbitkan instruksi disposisi kepada pelaksana [${pelaksanaNames}] dengan tenggat ${tenggatWaktuDate}. Instruksi: "${instruksiText}"`
+      'Penerbitan Disposisi',
+      `Menerbitkan instruksi disposisi kepada pelaksana [${pelaksanaNames}] dengan tenggat ${tenggatWaktuDate}. Instruksi: "${instruksiText}"`
     );
+
+    // Send notifications to all assigned pelaksana
+    selectedPelaksanaIds.forEach(pid => {
+      onTriggerNotification(
+        pid,
+        'Tugas Disposisi Baru',
+        `Pimpinan memberi instruksi disposisi perihal "${getLetterById(disposisiFormOpenForLetterId)?.perihal || ''}"`
+      );
+    });
 
     triggerToast('Disposisi berhasil diterbitkan ke Pelaksana!', 'success');
     setPimpinanFormError(null);
@@ -123,23 +135,30 @@ export default function DisposisiPage({
     setDisposisiFormOpenForLetterId(null);
   };
 
-  // Pelaksana: Start task (Pending -> In Progress)
-  const handleStartTask = (dispId: string, suratId: string) => {
-    setDisposisi(prev => prev.map(d => d.id === dispId ? { ...d, status: 'Sedang Dikerjakan' } : d));
-    
-    const userObj = users.find(u => u.id === currentUserId);
-    const aktorNama = userObj ? userObj.nama : 'Pelaksana';
+  // 2. Pelaksana: Accept/Process Task (Menunggu -> Sedang Dikerjakan)
+  const handleStartTask = (dispId: string) => {
+    const disp = disposisi.find(d => d.id === dispId);
+    if (!disp) return;
 
+    setDisposisi(prev => prev.map(d => d.id === dispId ? { ...d, status: 'Sedang Dikerjakan' } : d));
+
+    const aktorNama = getUserById(currentUserId)?.nama || 'Pelaksana';
     onAddAuditLog(
-      suratId,
       'Mulai Tindak Lanjut',
       `${aktorNama} mulai memproses tugas disposisi dan merubah status menjadi "Sedang Dikerjakan".`
+    );
+
+    // Notify Pimpinan
+    onTriggerNotification(
+      disp.pengirimId,
+      'Disposisi Mulai Diproses',
+      `Tugas disposisi surat ${getLetterById(disp.suratMasukId)?.nomorSurat} sedang dikerjakan oleh ${aktorNama}.`
     );
 
     triggerToast('Tugas disposisi mulai dikerjakan!', 'info');
   };
 
-  // Pelaksana: Complete task (In Progress -> Completed)
+  // 3. Pelaksana: Submit Completed Form
   const handleCompleteTaskSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!selectedDispToComplete || !completeCatatan.trim()) {
@@ -148,32 +167,30 @@ export default function DisposisiPage({
     }
 
     const dispId = selectedDispToComplete.id;
-    const suratId = selectedDispToComplete.suratMasukId;
-
-    // Update Disposisi
     setDisposisi(prev => prev.map(d => d.id === dispId ? { 
       ...d, 
       status: 'Selesai',
       catatanBalasan: completeCatatan.trim(),
-      dokumenBalasan: completeDokumen || 'Dokumen_Balasan_Selesai.pdf'
+      dokumenBalasan: completeDokumen.trim() || 'Dokumen_Balasan_Selesai.pdf'
     } : d));
 
-    // Check if ALL dispositions for this letter are completed. If yes, mark letter as Completed ('Selesai')
-    const linkedDisps = disposisi.filter(d => d.suratMasukId === suratId && d.id !== dispId);
-    const allOthersDone = linkedDisps.every(d => d.status === 'Selesai');
+    // Also update associated SuratMasuk to 'Selesai' if all linked dispositions are finished
+    const associatedLetterId = selectedDispToComplete.suratMasukId;
+    setSuratMasuk(prev => prev.map(s => s.id === associatedLetterId ? { ...s, status: 'Selesai' } : s));
 
-    if (allOthersDone) {
-      setSuratMasuk(prev => prev.map(s => s.id === suratId ? { ...s, status: 'Selesai' } : s));
-    }
-
-    const userObj = users.find(u => u.id === currentUserId);
-    const aktorNama = userObj ? userObj.nama : 'Pelaksana';
-
-    // Add Audit Log
+    const aktorNama = getUserById(currentUserId)?.nama || 'Pelaksana';
+    
+    // Audit log
     onAddAuditLog(
-      suratId,
-      'Tugas Disposisi Selesai',
+      'Penyelesaian Tugas Disposisi',
       `${aktorNama} telah merampungkan tugas disposisi. Laporan: "${completeCatatan}". Dokumen balasan terunggah: ${completeDokumen || 'Dokumen_Balasan_Selesai.pdf'}`
+    );
+
+    // Notify Pimpinan
+    onTriggerNotification(
+      selectedDispToComplete.pengirimId,
+      'Tindak Lanjut Disposisi Selesai',
+      `${aktorNama} telah merampungkan instruksi disposisi perihal "${getLetterById(associatedLetterId)?.perihal || ''}".`
     );
 
     triggerToast('Tindak lanjut disposisi berhasil diselesaikan!', 'success');
@@ -185,292 +202,426 @@ export default function DisposisiPage({
     setCompleteDokumen('');
   };
 
-  // Toggle multi-select pelaksana
-  const togglePelaksana = (id: string) => {
-    setSelectedPelaksanaIds(prev => 
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    );
-  };
+  // Filter Dispositions for the list
+  const filteredDispositions = disposisi.filter(item => {
+    const letter = getLetterById(item.suratMasukId);
+    if (!letter) return false;
 
-  // Determine user role visibility
-  const isPimpinanView = currentRole === 'Pimpinan' || currentRole === 'Super Admin' || currentRole === 'Admin Persuratan';
-  const isPelaksanaView = currentRole === 'Pelaksana';
+    // Search query matched with letter metadata or instruction
+    const matchesSearch = 
+      letter.nomorSurat.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      letter.asalSurat.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      letter.perihal.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.instruksi.toLowerCase().includes(searchQuery.toLowerCase());
 
-  // Filter tasks for logged-in Pelaksana
-  const myTasks = disposisi.filter(d => d.pelaksanaIds.includes(currentUserId));
+    const matchesStatus = filterStatus === 'Semua' || item.status === filterStatus;
+
+    // Visibility mapping based on role
+    let isVisible = false;
+    if (currentRole === 'Super Admin' || currentRole === 'Admin Persuratan') {
+      isVisible = true; // All visibility
+    } else if (currentRole === 'Pimpinan') {
+      isVisible = item.pengirimId === currentUserId; // Dispositions created by this boss
+    } else if (currentRole === 'Pelaksana') {
+      isVisible = item.pelaksanaIds.includes(currentUserId); // Dispositions sent to this staff
+    }
+
+    return matchesSearch && matchesStatus && isVisible;
+  });
+
+  // Get all unique Letters that have been dispositioned
+  const lettersInDisposition = suratMasuk.filter(s => s.status === 'Disposisi' || s.status === 'Selesai');
+
+  // Filtered Letters for "Pusat Berkas Disposisi"
+  const filteredBerkas = lettersInDisposition.filter(letter => {
+    // Check if the current user has visibility to at least one linked disposition
+    const linkedDisps = disposisi.filter(d => d.suratMasukId === letter.id);
+    const hasAccess = currentRole === 'Super Admin' || currentRole === 'Admin Persuratan' ||
+      (currentRole === 'Pimpinan' && linkedDisps.some(d => d.pengirimId === currentUserId)) ||
+      (currentRole === 'Pelaksana' && linkedDisps.some(d => d.pelaksanaIds.includes(currentUserId)));
+
+    if (!hasAccess) return false;
+
+    const matchesSearch = 
+      letter.nomorSurat.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      letter.asalSurat.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      letter.perihal.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (letter.lampiran && letter.lampiran.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    return matchesSearch;
+  });
+
+  const selectedDispDetail = disposisi.find(d => d.id === selectedDispDetailsId);
 
   return (
     <div className="space-y-6">
       
-      {/* ========================================================= */}
-      {/* 1. VIEW PIMPINAN / ADMIN (Kanban style tracking) */}
-      {/* ========================================================= */}
-      {isPimpinanView && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Column 1: Menunggu Disposisi (Letters in 'Diteruskan' status) */}
-          <div className="bg-white border border-slate-200 shadow-sm p-5 rounded-3xl flex flex-col h-[70vh]">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full" />
-                <h4 className="text-sm font-bold text-slate-800">Menunggu Disposisi</h4>
-              </div>
-              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-150 rounded-lg text-[10px] font-mono font-bold">
-                {waitingLetters.length} Surat
-              </span>
-            </div>
+      {/* Search and Tab Selection Header */}
+      <div className="bg-white rounded-2xl p-5 border border-slate-150 shadow-sm space-y-4">
+        {/* Navigation Tabs */}
+        <div className="flex border-b border-slate-150 pb-0.5 gap-6">
+          <button
+            id="tab-disposisi-tugas"
+            onClick={() => {
+              setActiveSubTab('tugas');
+              setSearchQuery('');
+            }}
+            className={`pb-3 text-xs font-bold transition-all relative cursor-pointer flex items-center gap-2 ${
+              activeSubTab === 'tugas' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <FileCheck className="h-4 w-4" />
+            <span>Alur Disposisi & Tugas</span>
+            {activeSubTab === 'tugas' && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 rounded-full animate-in fade-in duration-300" />
+            )}
+          </button>
 
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-              {waitingLetters.length === 0 ? (
-                <div className="py-24 text-center text-slate-400 text-xs italic font-sans font-medium">
-                  Selesai! Tidak ada surat masuk baru yang menunggu tindakan.
-                </div>
-              ) : (
-                waitingLetters.map((letter) => (
-                  <div 
-                    key={letter.id} 
-                    className="p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-3 hover:border-emerald-500/30 transition-all cursor-pointer group"
-                    onClick={() => {
-                      if (currentRole === 'Pimpinan' || currentRole === 'Super Admin') {
-                        setDisposisiFormOpenForLetterId(letter.id);
-                      } else {
-                        alert('Hanya Pimpinan yang dapat mengeluarkan instruksi disposisi.');
-                      }
-                    }}
+          <button
+            id="tab-disposisi-berkas"
+            onClick={() => {
+              setActiveSubTab('berkas');
+              setSearchQuery('');
+            }}
+            className={`pb-3 text-xs font-bold transition-all relative cursor-pointer flex items-center gap-2 ${
+              activeSubTab === 'berkas' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <Inbox className="h-4 w-4" />
+            <span>Pusat Berkas Disposisi</span>
+            {activeSubTab === 'berkas' && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 rounded-full animate-in fade-in duration-300" />
+            )}
+          </button>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div className="relative w-full md:max-w-xs">
+            <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-400" />
+            <input
+              id="input-search-disposisi"
+              type="text"
+              placeholder={activeSubTab === 'tugas' ? "Cari nomor surat, pelaksana, instruksi..." : "Cari nama file, nomor surat, perihal..."}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-emerald-500 rounded-xl py-2 pl-10 pr-4 text-xs font-semibold focus:ring-1 focus:ring-emerald-500/20 outline-none transition-all"
+            />
+          </div>
+
+          {activeSubTab === 'tugas' && (
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <span className="text-[10px] text-slate-400 font-mono font-bold uppercase">Status Tugas:</span>
+              <select
+                id="filter-status-disposisi"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold px-2.5 py-1.5 focus:border-emerald-500 outline-none transition-all cursor-pointer"
+              >
+                <option value="Semua">Semua Progres</option>
+                <option value="Menunggu">Menunggu</option>
+                <option value="Sedang Dikerjakan">Sedang Diproses</option>
+                <option value="Selesai">Selesai</option>
+              </select>
+            </div>
+          )}
+
+          {/* Rapid Action shortcut for boss */}
+          {currentRole === 'Pimpinan' && activeSubTab === 'tugas' && (
+            <div className="text-xs text-slate-500 font-semibold bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-xl border border-emerald-150 flex items-center gap-1">
+              <Info className="h-4 w-4 shrink-0" />
+              <span>Gunakan halaman <strong>Surat Masuk</strong> untuk menerbitkan disposisi baru.</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Main Grid: Conditional view based on activeSubTab */}
+      {activeSubTab === 'tugas' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          
+          {/* Dispositions List Table */}
+          <div className={`bg-white rounded-2xl border border-slate-150 overflow-hidden shadow-sm transition-all duration-300 ${selectedDispDetailsId ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-150">
+                    <th className="py-3 px-4 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">Referensi Surat</th>
+                    <th className="py-3 px-3 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">Instruksi Pimpinan</th>
+                    <th className="py-3 px-3 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider text-center">Tenggat Waktu</th>
+                    <th className="py-3 px-3 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider text-center">Status</th>
+                    <th className="py-3 px-4 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider text-right">Tindakan</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredDispositions.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-slate-400">
+                        <FileCheck className="h-9 w-9 text-slate-300 mx-auto mb-2" />
+                        <p className="text-xs">Belum ada catatan disposisi yang terdaftar.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredDispositions.map((item) => {
+                      const letter = getLetterById(item.suratMasukId);
+                      return (
+                        <tr
+                          key={item.id}
+                          onClick={() => setSelectedDispDetailsId(item.id)}
+                          className={`hover:bg-slate-50/50 transition-all cursor-pointer ${
+                            selectedDispDetailsId === item.id ? 'bg-emerald-50/30' : ''
+                          }`}
+                        >
+                          <td className="py-4 px-4">
+                            <div className="font-bold text-slate-800 text-[11px]">
+                              {letter?.nomorSurat}
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-medium truncate max-w-[150px] mt-0.5">
+                              {letter?.asalSurat}
+                            </div>
+                            <span className="text-[9px] text-slate-400 block mt-1 font-mono">
+                              Disposisi: {item.tanggalDisposisi}
+                            </span>
+                          </td>
+                          <td className="py-4 px-3">
+                            <p className="text-[11px] text-slate-600 font-medium line-clamp-2 leading-relaxed max-w-[280px]">
+                              {item.instruksi}
+                            </p>
+                            <span className="text-[9px] text-emerald-600 font-bold block mt-1 truncate">
+                              Ke: {item.pelaksanaIds.map(pid => getUserById(pid)?.nama.split(',')[0]).join(', ')}
+                            </span>
+                          </td>
+                          <td className="py-4 px-3 text-center">
+                            <span className="text-[10px] font-bold text-slate-700 font-mono">
+                              {item.tenggatWaktu}
+                            </span>
+                          </td>
+                          <td className="py-4 px-3 text-center">
+                            <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                              item.status === 'Menunggu'
+                                ? 'bg-amber-50 text-amber-700 border-amber-150 animate-pulse'
+                                : item.status === 'Sedang Dikerjakan'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-150'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-150'
+                            }`}>
+                              {item.status === 'Sedang Dikerjakan' ? 'Sedang Diproses' : item.status}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* Pelaksana action: Start processing task */}
+                              {item.status === 'Menunggu' && currentRole === 'Pelaksana' && (
+                                <button
+                                  id={`btn-start-task-${item.id}`}
+                                  onClick={() => handleStartTask(item.id)}
+                                  className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1 shadow-md shadow-blue-600/10"
+                                >
+                                  <span>Proses</span>
+                                  <ArrowRight className="h-3 w-3" />
+                                </button>
+                              )}
+
+                              {/* Pelaksana action: Submit completed response reports */}
+                              {item.status === 'Sedang Dikerjakan' && currentRole === 'Pelaksana' && (
+                                <button
+                                  id={`btn-trigger-complete-${item.id}`}
+                                  onClick={() => setSelectedDispToComplete(item)}
+                                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1 shadow-md shadow-emerald-600/10"
+                                >
+                                  <span>Laporkan</span>
+                                  <Send className="h-3 w-3" />
+                                </button>
+                              )}
+
+                              <span className="text-[10px] text-slate-400 font-mono hidden md:inline">
+                                #{item.id.split('-')[1]}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Details side viewer panel */}
+          {selectedDispDetailsId && selectedDispDetail && (() => {
+            const letter = getLetterById(selectedDispDetail.suratMasukId);
+            return (
+              <div className="bg-white rounded-2xl border border-slate-150 p-5 shadow-sm space-y-4 animate-fade-in text-left">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="text-xs font-bold text-slate-800">Detail Disposisi & Berkas</h3>
+                  <button
+                    id="btn-close-detail-panel-disp"
+                    onClick={() => setSelectedDispDetailsId(null)}
+                    className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-lg transition-all"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-mono text-slate-400 font-bold truncate max-w-[120px]">{letter.nomorSurat}</span>
-                      <span className="px-1.5 py-0.5 rounded text-[8px] bg-emerald-50 text-emerald-700 border border-emerald-150 font-mono font-bold">
-                        {letter.klasifikasi}
-                      </span>
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-3.5">
+                  <div>
+                    <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold">Surat Terkait</span>
+                    <p className="text-xs font-black text-slate-800 mt-0.5">{letter?.nomorSurat}</p>
+                    <p className="text-[10px] text-slate-500 leading-tight mt-0.5">{letter?.asalSurat}</p>
+                  </div>
+
+                  <div>
+                    <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold block">Instruksi Kepala Dinas</span>
+                    <p className="text-[11px] font-semibold text-slate-700 bg-amber-50/40 border border-amber-100 p-3 rounded-xl mt-1 leading-relaxed">
+                      "{selectedDispDetail.instruksi}"
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold">Tanggal Disposisi</span>
+                      <p className="text-[10px] font-bold text-slate-700 mt-0.5">{selectedDispDetail.tanggalDisposisi}</p>
                     </div>
-                    <p className="text-xs font-bold text-slate-800 group-hover:text-emerald-600 transition-colors leading-normal">{letter.perihal}</p>
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-200">
-                      <span className="font-semibold">Dari: {letter.asalSurat.split(' ')[0]}</span>
-                      {(currentRole === 'Pimpinan' || currentRole === 'Super Admin') && (
-                        <span className="text-emerald-600 font-bold group-hover:underline flex items-center gap-0.5">
-                          Tindak lanjut <ArrowRight className="h-3 w-3" />
-                        </span>
-                      )}
+                    <div>
+                      <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold">Tenggat Penyelesaian</span>
+                      <p className="text-[10px] font-bold text-rose-600 mt-0.5 font-mono">{selectedDispDetail.tenggatWaktu}</p>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
 
-          {/* Column 2: Sedang Dikerjakan (Active Dispositions) */}
-          <div className="bg-white border border-slate-200 shadow-sm p-5 rounded-3xl flex flex-col h-[70vh]">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 bg-amber-500 rounded-full" />
-                <h4 className="text-sm font-bold text-slate-800">Sedang Diproses</h4>
-              </div>
-              <span className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-150 rounded-lg text-[10px] font-mono font-bold">
-                {activeDisposisi.length} Disposisi
-              </span>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-              {activeDisposisi.length === 0 ? (
-                <div className="py-24 text-center text-slate-400 text-xs italic font-sans font-medium">
-                  Belum ada disposisi yang aktif.
-                </div>
-              ) : (
-                activeDisposisi.map((disp) => {
-                  const linkedLetter = suratMasuk.find(s => s.id === disp.suratMasukId);
-                  const pelaksanaNames = disp.pelaksanaIds.map(id => users.find(u => u.id === id)?.nama.split(',')[0]).join(', ');
-                  
-                  return (
-                    <div 
-                      key={disp.id} 
-                      className="p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-3 hover:border-amber-500/30 transition-all"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono text-amber-700 font-bold uppercase tracking-wider">Tenggat: {disp.tenggatWaktu}</span>
-                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold border ${
-                          disp.status === 'Sedang Dikerjakan' ? 'bg-blue-50 text-blue-700 border-blue-150' : 'bg-amber-50 text-amber-700 border-amber-200'
-                        }`}>
-                          {disp.status}
-                        </span>
-                      </div>
-                      <p className="text-xs font-bold text-slate-800 leading-normal">{linkedLetter?.perihal || 'Perihal...'}</p>
-                      <p className="text-xs text-slate-600 font-medium italic">"Instruksi: {disp.instruksi}"</p>
-                      <div className="pt-2 border-t border-slate-200 flex items-center gap-1.5">
-                        <UserCheck className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                        <span className="text-[10px] text-slate-500 font-semibold">Pelaksana: {pelaksanaNames}</span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Column 3: Selesai (Completed tasks) */}
-          <div className="bg-white border border-slate-200 shadow-sm p-5 rounded-3xl flex flex-col h-[70vh]">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full" />
-                <h4 className="text-sm font-bold text-slate-800">Selesai Ditindak</h4>
-              </div>
-              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-150 rounded-lg text-[10px] font-mono font-bold">
-                {completedDisposisi.length} Selesai
-              </span>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-              {completedDisposisi.length === 0 ? (
-                <div className="py-24 text-center text-slate-400 text-xs italic font-sans font-medium">
-                  Belum ada laporan penyelesaian disposisi.
-                </div>
-              ) : (
-                completedDisposisi.map((disp) => {
-                  const linkedLetter = suratMasuk.find(s => s.id === disp.suratMasukId);
-                  const pelaksanaNames = disp.pelaksanaIds.map(id => users.find(u => u.id === id)?.nama.split(',')[0]).join(', ');
-                  
-                  return (
-                    <div 
-                      key={disp.id} 
-                      className="p-4 bg-emerald-50/10 border border-emerald-500/10 rounded-2xl space-y-3 hover:border-emerald-500/20 transition-all"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono text-emerald-700 font-bold">Diselesaikan: {disp.tanggalDisposisi}</span>
-                        <span className="px-1.5 py-0.5 rounded text-[8px] bg-emerald-50 text-emerald-700 border border-emerald-150 font-mono font-bold">
-                          Selesai
-                        </span>
-                      </div>
-                      <p className="text-xs font-bold text-slate-800 leading-normal">{linkedLetter?.perihal || 'Perihal...'}</p>
-                      
-                      <div className="bg-slate-50 p-2.5 rounded-xl text-[11px] text-slate-600 border border-slate-200 font-medium">
-                        <span className="font-bold text-emerald-700 text-[10px] block mb-1">Laporan Hasil:</span>
-                        "{disp.catatanBalasan}"
-                      </div>
-
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500">
-                        <span className="font-semibold">Oleh: {pelaksanaNames}</span>
-                        {disp.dokumenBalasan && (
-                          <span className="text-emerald-600 font-bold flex items-center gap-1">
-                            <FileCheck className="h-3.5 w-3.5 shrink-0" /> Doc OK
+                  <div>
+                    <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold block">Pelaksana Terpilih</span>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {selectedDispDetail.pelaksanaIds.map(pid => {
+                        const u = getUserById(pid);
+                        return (
+                          <span key={pid} className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-lg">
+                            <UserIcon className="h-3 w-3 text-slate-500" />
+                            {u?.nama.split(',')[0]}
                           </span>
-                        )}
-                      </div>
+                        );
+                      })}
                     </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
+                  </div>
 
-        </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* 2. VIEW PELAKSANA (List of tasks specifically assigned to NIP) */}
-      {/* ========================================================= */}
-      {isPelaksanaView && (
-        <div className="space-y-4 text-left max-w-4xl mx-auto">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-            <div className="flex items-center gap-2">
-              <ClipboardList className="h-5 w-5 text-emerald-600" />
-              <h4 className="font-display font-extrabold text-slate-800">Daftar Penugasan & Disposisi Saya</h4>
-            </div>
-            <span className="text-xs font-mono text-slate-400 font-bold">Total Tugas: {myTasks.length} Instruksi</span>
-          </div>
-
-          <div className="space-y-4">
-            {myTasks.length === 0 ? (
-              <div className="bg-white border border-slate-200 shadow-sm p-12 rounded-3xl text-center text-slate-400 text-xs font-sans font-medium">
-                Luar biasa! Tidak ada instruksi disposisi tertunda untuk profil Anda hari ini.
-              </div>
-            ) : (
-              myTasks.map((task) => {
-                const matchSurat = suratMasuk.find(s => s.id === task.suratMasukId);
-                
-                return (
-                  <div 
-                    key={task.id} 
-                    className={`bg-white border p-6 rounded-3xl shadow-sm transition-all ${
-                      task.status === 'Selesai' 
-                        ? 'border-emerald-500/20 bg-emerald-50/10' 
-                        : 'border-slate-200 hover:border-emerald-500/20'
-                    }`}
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4 border-b border-slate-100">
-                      <div>
-                        <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest font-bold">Surat Referensi</span>
-                        <h4 className="text-sm font-bold text-slate-800 mt-1">{matchSurat?.perihal || 'Perihal Surat...'}</h4>
-                        <p className="text-xs font-mono text-emerald-600 font-bold mt-1">{matchSurat?.nomorSurat} — Dari: {matchSurat?.asalSurat}</p>
+                  {/* Attachment physical document of incoming letter */}
+                  {letter?.lampiran && (
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-150 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-emerald-600" />
+                        <span className="text-[10px] font-bold text-slate-700 truncate max-w-[130px]">{letter.lampiran}</span>
                       </div>
-                      
-                      {/* Status Badges */}
-                      <div className="flex items-center gap-2 self-start sm:self-auto font-bold">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-bold border ${
-                          task.status === 'Selesai' 
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-150'
-                            : task.status === 'Sedang Dikerjakan'
-                              ? 'bg-blue-55 text-blue-700 border-blue-150'
-                              : 'bg-amber-50 text-amber-700 border-amber-150'
-                        }`}>
-                          {task.status}
-                        </span>
-                        {task.status !== 'Selesai' && (
-                          <span className="text-rose-700 text-[10px] font-mono font-bold flex items-center gap-1 bg-rose-50 px-2 py-0.5 rounded border border-rose-150">
-                            <AlertCircle className="h-3 w-3" /> Tenggat: {task.tenggatWaktu}
-                          </span>
-                        )}
-                      </div>
+                      <button
+                        onClick={() => alert(`Membuka berkas: ${letter.lampiran}`)}
+                        className="text-[9px] font-extrabold bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 px-2 py-1 rounded-lg"
+                      >
+                        Buka
+                      </button>
                     </div>
+                  )}
 
-                    <div className="pt-4 grid grid-cols-1 md:grid-cols-3 gap-6">
-                      
-                      {/* Left: Instruction details */}
-                      <div className="md:col-span-2 space-y-3">
-                        <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-bold">Instruksi Pimpinan</span>
-                        <p className="text-xs text-slate-700 leading-relaxed font-bold italic">"{task.instruksi}"</p>
-                        
-                        {task.status === 'Selesai' && task.catatanBalasan && (
-                          <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs mt-3">
-                            <span className="font-bold text-emerald-700 block mb-1">Laporan Balasan Hasil Anda:</span>
-                            "{task.catatanBalasan}"
-                            {task.dokumenBalasan && (
-                              <p className="text-[10px] text-emerald-600 font-mono font-bold mt-2 flex items-center gap-1">
-                                <FileCheck className="h-3.5 w-3.5 shrink-0" /> File: {task.dokumenBalasan}
-                              </p>
-                            )}
+                  {/* Reply from pelaksana (Balasan / Hasil laporan) */}
+                  {selectedDispDetail.status === 'Selesai' && (
+                    <div className="border-t border-slate-100 pt-3.5 space-y-2">
+                      <span className="text-[9px] font-mono text-emerald-600 uppercase tracking-wider font-extrabold block">Laporan Tindak Lanjut Pelaksana</span>
+                      <p className="text-[11px] font-semibold text-slate-600 bg-emerald-50/20 border border-emerald-100 p-3 rounded-xl leading-relaxed">
+                        "{selectedDispDetail.catatanBalasan}"
+                      </p>
+                      {selectedDispDetail.dokumenBalasan && (
+                        <div className="flex items-center justify-between bg-emerald-50/10 border border-emerald-100/50 p-2.5 rounded-xl">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-3.5 w-3.5 text-emerald-600" />
+                            <span className="text-[10px] font-bold text-slate-700 truncate max-w-[140px]">{selectedDispDetail.dokumenBalasan}</span>
                           </div>
-                        )}
-                      </div>
-
-                      {/* Right: Functional Workflow buttons for active state */}
-                      {task.status !== 'Selesai' && (
-                        <div className="flex flex-col justify-center gap-2 self-center w-full">
-                          
-                          {task.status === 'Menunggu' && (
-                            <button
-                              id={`btn-start-task-${task.id}`}
-                              onClick={() => handleStartTask(task.id, task.suratMasukId)}
-                              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md shadow-blue-600/10 cursor-pointer"
-                            >
-                              <Clock className="h-4 w-4 shrink-0" />
-                              <span>Mulai Dikerjakan</span>
-                            </button>
-                          )}
-
-                          {task.status === 'Sedang Dikerjakan' && (
-                            <button
-                              id={`btn-complete-task-trigger-${task.id}`}
-                              onClick={() => setSelectedDispToComplete(task)}
-                              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-600/10 cursor-pointer"
-                            >
-                              <CheckCircle2 className="h-4 w-4 shrink-0" />
-                              <span>Selesaikan Tugas</span>
-                            </button>
-                          )}
-
+                          <button
+                            onClick={() => alert(`Membuka berkas balasan: ${selectedDispDetail.dokumenBalasan}`)}
+                            className="text-[9px] font-bold bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50 px-2 py-1 rounded-lg"
+                          >
+                            Buka Laporan
+                          </button>
                         </div>
                       )}
+                    </div>
+                  )}
 
+                </div>
+              </div>
+            );
+          })()}
+
+        </div>
+      ) : (
+        /* Pusat Berkas Disposisi View (NEW!) */
+        <div className="bg-white rounded-2xl border border-slate-150 overflow-hidden shadow-sm p-6 text-left space-y-5">
+          <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+            <div>
+              <h3 className="text-xs font-black text-slate-800">Daftar Arsip & Berkas yang di-Disposisi</h3>
+              <p className="text-[10px] text-slate-400 mt-1">Daftar seluruh dokumen lampiran surat resmi yang sedang atau telah melalui proses lembar disposisi pimpinan.</p>
+            </div>
+            <span className="text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+              <Layers className="h-3 w-3" />
+              <span>{filteredBerkas.length} Berkas Fisik</span>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredBerkas.length === 0 ? (
+              <div className="col-span-full py-16 text-center text-slate-400">
+                <Inbox className="h-10 w-10 text-slate-200 mx-auto mb-2.5" />
+                <p className="text-xs font-bold">Belum ada berkas surat yang di-disposisi.</p>
+                <p className="text-[10px] mt-1">Berkas akan tampil di sini setelah surat masuk diteruskan dan didelegasikan oleh Kepala Dinas.</p>
+              </div>
+            ) : (
+              filteredBerkas.map((letter) => {
+                const linkedDisps = disposisi.filter(d => d.suratMasukId === letter.id);
+                return (
+                  <div 
+                    key={letter.id}
+                    className="border border-slate-150 hover:border-emerald-500/40 hover:shadow-md rounded-2xl p-4.5 transition-all bg-slate-50/50 flex flex-col justify-between space-y-4"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-mono text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                          {letter.klasifikasi}
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-mono font-bold">
+                          {letter.tanggalTerima}
+                        </span>
+                      </div>
+                      
+                      <h4 className="text-[11px] font-black text-slate-800 leading-snug line-clamp-1">
+                        {letter.nomorSurat}
+                      </h4>
+                      
+                      <p className="text-[10px] text-slate-500 font-semibold line-clamp-2 leading-relaxed">
+                        {letter.perihal}
+                      </p>
+                      
+                      <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                        <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-extrabold block">Instruksi Pimpinan Terkait:</span>
+                        {linkedDisps.map(disp => (
+                          <div key={disp.id} className="text-[10px] text-slate-600 font-medium bg-white border border-slate-150 p-2 rounded-xl">
+                            <p className="line-clamp-2 leading-relaxed italic">"{disp.instruksi}"</p>
+                            <span className="text-[9px] font-bold text-slate-400 mt-1 block font-mono">
+                              Oleh: Kepala Dinas &bull; Status: {disp.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <FileText className="h-4.5 w-4.5 text-emerald-600" />
+                        <span className="text-[10px] font-bold text-slate-700 truncate max-w-[120px]">
+                          {letter.lampiran || 'Unduhan_Arsip.pdf'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => alert(`Membuka berkas digital: ${letter.lampiran || 'Unduhan_Arsip.pdf'}`)}
+                        className="text-[10px] font-bold bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
+                      >
+                        Lihat Berkas
+                      </button>
                     </div>
                   </div>
                 );
@@ -480,119 +631,129 @@ export default function DisposisiPage({
         </div>
       )}
 
-      {/* ========================================================= */}
-      {/* 3. MODAL FORMS */}
-      {/* ========================================================= */}
-      
-      {/* Modal A: Pimpinan drafting a new Disposition */}
-      <Modal
-        isOpen={disposisiFormOpenForLetterId !== null}
-        onClose={() => setDisposisiFormOpenForLetterId(null)}
-        title="Formulir Instruksi Disposisi"
-        size="md"
-      >
-        {disposisiFormOpenForLetterId && (
-          <form onSubmit={handleCreateDisposition} className="space-y-5 text-left">
-            {pimpinanFormError && (
-              <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-xl text-xs flex items-center gap-2 animate-in fade-in duration-200">
-                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-                <span>{pimpinanFormError}</span>
-              </div>
+      {/* Modal: Pimpinan Creates Disposition */}
+      {disposisiFormOpenForLetterId && (() => {
+        const letter = getLetterById(disposisiFormOpenForLetterId);
+        return (
+          <Modal
+            isOpen={disposisiFormOpenForLetterId !== null}
+            onClose={() => {
+              setDisposisiFormOpenForLetterId(null);
+              setPimpinanFormError(null);
+            }}
+            title="Terbitkan Lembar Disposisi"
+            size="md"
+          >
+            {disposisiFormOpenForLetterId && (
+              <form onSubmit={handleCreateDisposition} className="space-y-5 text-left">
+                {pimpinanFormError && (
+                  <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-xl text-xs flex items-center gap-2 animate-in fade-in duration-200">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                    <span>{pimpinanFormError}</span>
+                  </div>
+                )}
+                <div>
+                  <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-bold">Perihal Surat Terpilih</span>
+                  <p className="text-xs font-bold text-slate-800 mt-0.5">
+                    {letter?.perihal}
+                  </p>
+                  <span className="text-[10px] text-slate-400 font-mono mt-1 block">
+                    No: {letter?.nomorSurat} &bull; Pengirim: {letter?.asalSurat}
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-2 font-bold">Pilih Pelaksana Penerima Tugas (Bisa multi-pilih)</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1 border border-slate-100 rounded-xl">
+                    {pelaksanaUsers.map(user => {
+                      const isSelected = selectedPelaksanaIds.includes(user.id);
+                      return (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedPelaksanaIds(prev => prev.filter(id => id !== user.id));
+                            } else {
+                              setSelectedPelaksanaIds(prev => [...prev, user.id]);
+                            }
+                          }}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition-all text-xs font-bold cursor-pointer ${
+                            isSelected 
+                              ? 'bg-emerald-50 border-emerald-500 text-emerald-800' 
+                              : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate">{user.nama.split(',')[0]}</p>
+                            <span className="text-[9px] font-mono text-slate-400 block">{user.jabatan}</span>
+                          </div>
+                          {isSelected && <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Instruksi Pokok / Arahan Pimpinan</label>
+                  <textarea
+                    id="input-instruksi-disposisi"
+                    required
+                    rows={4}
+                    placeholder="Tulis instruksi tindak lanjut dengan bahasa yang jelas, lugas, dan terperinci..."
+                    value={instruksiText}
+                    onChange={(e) => setInstruksiText(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-emerald-500/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Tenggat Waktu Penyelesaian</label>
+                  <input
+                    id="input-tenggat-disposisi"
+                    type="date"
+                    required
+                    value={tenggatWaktuDate}
+                    onChange={(e) => setTenggatWaktuDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-emerald-500/10"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                  <button
+                    id="btn-cancel-create-disp"
+                    type="button"
+                    onClick={() => {
+                      setDisposisiFormOpenForLetterId(null);
+                      setPimpinanFormError(null);
+                    }}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    id="btn-confirm-create-disp"
+                    type="submit"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer shadow-md shadow-emerald-600/10"
+                  >
+                    Terbitkan Disposisi
+                  </button>
+                </div>
+              </form>
             )}
-            <div>
-              <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-bold">Perihal Surat Terpilih</span>
-              <p className="text-xs font-bold text-slate-800 mt-0.5">
-                {suratMasuk.find(s => s.id === disposisiFormOpenForLetterId)?.perihal}
-              </p>
-            </div>
+          </Modal>
+        );
+      })()}
 
-            {/* Select Executors (Multi-Select Checklist) */}
-            <div>
-              <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-2 font-bold">Pilih Pelaksana / Staff</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1.5 border border-slate-200 rounded-xl bg-slate-50">
-                {pelaksanaUsers.map((u) => {
-                  const isChecked = selectedPelaksanaIds.includes(u.id);
-                  return (
-                    <button
-                      id={`checkbox-pelaksana-${u.id}`}
-                      key={u.id}
-                      type="button"
-                      onClick={() => togglePelaksana(u.id)}
-                      className={`flex items-center gap-2.5 p-2 rounded-lg text-left text-xs transition-colors ${
-                        isChecked 
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-150' 
-                          : 'hover:bg-slate-200 text-slate-600 font-semibold'
-                      }`}
-                    >
-                      <input 
-                        type="checkbox" 
-                        checked={isChecked} 
-                        readOnly 
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-3 w-3 shrink-0" 
-                      />
-                      <div className="min-w-0">
-                        <p className="font-bold truncate text-slate-800">{u.nama.split(',')[0]}</p>
-                        <p className="text-[9px] text-slate-500 font-semibold truncate">{u.jabatan}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Instruction Notes */}
-            <div>
-              <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Instruksi Catatan Disposisi</label>
-              <textarea
-                id="form-disp-instruksi"
-                placeholder="Tulis perintah tindak lanjut resmi untuk pelaksana..."
-                value={instruksiText}
-                onChange={(e) => setInstruksiText(e.target.value)}
-                rows={4}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3.5 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/20 focus:bg-white"
-              />
-            </div>
-
-            {/* Deadline */}
-            <div>
-              <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Tenggat Waktu Tindak Lanjut</label>
-              <input
-                id="form-disp-tenggat"
-                type="date"
-                value={tenggatWaktuDate}
-                onChange={(e) => setTenggatWaktuDate(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3.5 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none focus:bg-white font-semibold"
-              />
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 mt-6">
-              <button
-                id="btn-cancel-disp"
-                type="button"
-                onClick={() => setDisposisiFormOpenForLetterId(null)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                id="btn-submit-disp"
-                type="submit"
-                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-600/10"
-              >
-                <ClipboardList className="h-4 w-4" />
-                <span>Kirim Disposisi Resmi</span>
-              </button>
-            </div>
-          </form>
-        )}
-      </Modal>
-
-      {/* Modal B: Pelaksana uploading reports to complete a task */}
+      {/* Modal: Pelaksana Submits Response Reports */}
       <Modal
         isOpen={selectedDispToComplete !== null}
-        onClose={() => setSelectedDispToComplete(null)}
-        title="Laporan Penyelesaian Disposisi"
+        onClose={() => {
+          setSelectedDispToComplete(null);
+          setPelaksanaFormError(null);
+        }}
+        title="Laporkan Hasil Tindak Lanjut"
         size="md"
       >
         {selectedDispToComplete && (
@@ -606,53 +767,56 @@ export default function DisposisiPage({
             <div>
               <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-bold">Tugas Referensi</span>
               <p className="text-xs font-bold text-slate-800 mt-0.5">
-                "{selectedDispToComplete.instruksi}"
+                {getLetterById(selectedDispToComplete.suratMasukId)?.perihal}
+              </p>
+              <p className="text-[10px] text-slate-500 italic mt-1 bg-amber-50/50 border border-amber-100 p-2.5 rounded-lg">
+                "Instruksi: {selectedDispToComplete.instruksi}"
               </p>
             </div>
 
             <div>
-              <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Catatan Laporan Hasil Tindak Lanjut</label>
+              <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Catatan Balasan / Laporan Hasil Penyelesaian</label>
               <textarea
-                id="form-task-catatan"
-                placeholder="Jelaskan langkah-langkah, hasil konfirmasi, atau tindak lanjut sukses yang telah Anda laksanakan..."
+                id="input-catatan-balasan"
+                required
+                rows={5}
+                placeholder="Tuliskan poin-poin penting laporan hasil kegiatan atau koordinasi yang telah dirampungkan sesuai arahan..."
                 value={completeCatatan}
                 onChange={(e) => setCompleteCatatan(e.target.value)}
-                rows={4}
-                required
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3.5 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/20 focus:bg-white"
+                className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-emerald-500/10"
               />
             </div>
 
             <div>
-              <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Unggah Berkas Bukti Balasan (Simulasi)</label>
+              <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Nama Berkas Bukti Dukung (PDF/Doc)</label>
               <input
-                id="form-task-file"
+                id="input-dokumen-balasan"
                 type="text"
-                placeholder="Masukkan nama file hasil lampiran (contoh: Laporan_Final_Rapat.pdf)"
+                placeholder="Contoh: Berita_Acara_Hasil_Tindak_Lanjut.pdf"
                 value={completeDokumen}
                 onChange={(e) => setCompleteDokumen(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3.5 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:bg-white font-semibold"
+                className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-emerald-500/10"
               />
-              <span className="block text-[9px] text-slate-400 mt-1 font-semibold">Simulasi: Berkas yang dilaporkan akan terarsip resmi ke dalam dossier persuratan.</span>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 mt-6">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
               <button
                 id="btn-cancel-complete-task"
                 type="button"
-                onClick={() => setSelectedDispToComplete(null)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer"
+                onClick={() => {
+                  setSelectedDispToComplete(null);
+                  setPelaksanaFormError(null);
+                }}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer"
               >
-                Kembali
+                Batal
               </button>
               <button
-                id="btn-submit-complete-task"
+                id="btn-confirm-complete-task"
                 type="submit"
-                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-600/10"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer shadow-md shadow-emerald-600/10"
               >
-                <CheckCircle className="h-4 w-4" />
-                <span>Simpan & Selesaikan</span>
+                Kirim Laporan Resmi
               </button>
             </div>
           </form>

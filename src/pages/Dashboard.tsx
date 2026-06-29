@@ -1,344 +1,305 @@
-import { Inbox, Send, ClipboardCopy, CheckCircle, Clock, AlertTriangle, ArrowRight } from 'lucide-react';
-import { SuratMasuk, SuratKeluar, Disposisi, SifatSurat, User } from '../types';
+import React from 'react';
+import { 
+  Inbox, 
+  Send, 
+  FileCheck, 
+  Users, 
+  TrendingUp, 
+  ShieldCheck, 
+  Clock, 
+  AlertCircle,
+  FileSpreadsheet
+} from 'lucide-react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  Legend 
+} from 'recharts';
+import { SuratMasuk, SuratKeluar, Disposisi, User, AuditTrail } from '../types';
 
 interface DashboardProps {
   suratMasuk: SuratMasuk[];
   suratKeluar: SuratKeluar[];
   disposisi: Disposisi[];
   users: User[];
-  onNavigate: (tab: string) => void;
-  onViewLetter: (id: string, type: 'Masuk' | 'Keluar') => void;
+  auditTrail: AuditTrail[];
+  setActiveTab: (tab: string) => void;
+  currentRole: string;
 }
 
-export default function Dashboard({
-  suratMasuk,
-  suratKeluar,
-  disposisi,
-  users,
-  onNavigate,
-  onViewLetter
+export default function Dashboard({ 
+  suratMasuk, 
+  suratKeluar, 
+  disposisi, 
+  users, 
+  auditTrail,
+  setActiveTab,
+  currentRole
 }: DashboardProps) {
-  
-  // Calculate analytics
+
+  // Calculate stats
   const totalMasuk = suratMasuk.length;
   const totalKeluar = suratKeluar.length;
-  
-  const disposisiAktifCount = disposisi.filter(d => d.status === 'Menunggu' || d.status === 'Sedang Dikerjakan').length;
-  const disposisiSelesaiCount = disposisi.filter(d => d.status === 'Selesai').length;
+  const totalDisp = disposisi.length;
+  const totalUsers = users.length;
 
-  // Get 5 latest incoming letters
-  const latestSuratMasuk = [...suratMasuk]
-    .sort((a, b) => new Date(b.tanggalTerima).getTime() - new Date(a.tanggalTerima).getTime())
-    .slice(0, 5);
+  const pendingDisp = disposisi.filter(d => d.status === 'Menunggu').length;
+  const progressDisp = disposisi.filter(d => d.status === 'Sedang Dikerjakan').length;
+  const completedDisp = disposisi.filter(d => d.status === 'Selesai').length;
 
-  // Get urgent active dispositions (e.g., sorted by deadline closest)
-  const urgentDisposisi = disposisi
-    .filter(d => d.status === 'Menunggu' || d.status === 'Sedang Dikerjakan')
-    .sort((a, b) => new Date(a.tenggatWaktu).getTime() - new Date(b.tenggatWaktu).getTime())
-    .slice(0, 4);
-
-  // Calculate stats for Classification
-  const classificationStats = {
-    Umum: suratMasuk.filter(s => s.klasifikasi === 'Umum').length,
-    Keuangan: suratMasuk.filter(s => s.klasifikasi === 'Keuangan').length,
-    Kepegawaian: suratMasuk.filter(s => s.klasifikasi === 'Kepegawaian').length,
-    Akademik: suratMasuk.filter(s => s.klasifikasi === 'Akademik').length,
-  };
-
-  const getSifatBadgeColor = (sifat: SifatSurat) => {
-    switch (sifat) {
-      case 'Penting': return 'bg-rose-50 text-rose-700 border-rose-150';
-      case 'Rahasia': return 'bg-pink-50 text-pink-700 border-pink-150';
-      default: return 'bg-emerald-50 text-emerald-700 border-emerald-150';
-    }
-  };
-
-  const getStatusBadgeColor = (status: string) => {
-    switch (status) {
-      case 'Selesai': return 'bg-emerald-50 text-emerald-700 border-emerald-150';
-      case 'Didisposisikan': return 'bg-blue-50 text-blue-700 border-blue-150';
-      case 'Diteruskan': return 'bg-emerald-50 text-emerald-700 border-emerald-150';
-      default: return 'bg-slate-100 text-slate-700 border-slate-200';
-    }
-  };
+  // Chart data: count letters by classification
+  const classifications = ['Umum', 'Keuangan', 'Kepegawaian', 'Hukum', 'Sarpras'];
+  const chartData = classifications.map(c => {
+    return {
+      name: c,
+      'Surat Masuk': suratMasuk.filter(s => s.klasifikasi === c).length,
+      'Surat Keluar': suratKeluar.filter(s => s.klasifikasi === c).length,
+    };
+  });
 
   return (
     <div className="space-y-6">
-      {/* Stat Cards Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        
-        {/* Card 1: Surat Masuk */}
-        <div className="bg-white border border-slate-200 shadow-sm hover:shadow-md p-6 rounded-3xl flex items-center justify-between group relative overflow-hidden transition-all duration-300">
-          <div className="space-y-2 relative z-10">
-            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest font-bold">Surat Masuk</span>
-            <h3 className="text-3xl font-display font-extrabold text-slate-900 group-hover:scale-105 transition-transform duration-300 leading-none">{totalMasuk}</h3>
-            <p className="text-xs text-slate-500 flex items-center gap-1">
-              <span className="text-emerald-600 font-bold font-mono">↑ 100%</span>
-              <span>Terarsip digital</span>
-            </p>
-          </div>
-          <div className="p-4 bg-emerald-50 rounded-2xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300 relative z-10">
-            <Inbox className="h-6 w-6" />
-          </div>
-          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors" />
+      
+      {/* Welcome Banner */}
+      <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden flex items-center justify-between border border-slate-700/50">
+        <div className="space-y-1.5 z-10 max-w-lg">
+          <span className="text-[10px] font-mono uppercase bg-emerald-500 text-slate-900 font-extrabold px-2.5 py-1 rounded-full">
+            E-Disposisi Terintegrasi
+          </span>
+          <h2 className="text-xl font-extrabold tracking-tight">Selamat Datang di Portal Tata Usaha Digital</h2>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Kelola persuratan dinas, pelacakan draf, penerbitan instruksi disposisi instansi, dan pelaporan hasil kerja pelaksana secara real-time.
+          </p>
         </div>
-
-        {/* Card 2: Surat Keluar */}
-        <div className="bg-white border border-slate-200 shadow-sm hover:shadow-md p-6 rounded-3xl flex items-center justify-between group relative overflow-hidden transition-all duration-300">
-          <div className="space-y-2 relative z-10">
-            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest font-bold">Surat Keluar</span>
-            <h3 className="text-3xl font-display font-extrabold text-slate-900 group-hover:scale-105 transition-transform duration-300 leading-none">{totalKeluar}</h3>
-            <p className="text-xs text-slate-500 flex items-center gap-1">
-              <span className="text-teal-600 font-bold font-mono">↑ 80%</span>
-              <span>Terregistrasi keluar</span>
-            </p>
-          </div>
-          <div className="p-4 bg-teal-50 rounded-2xl text-teal-600 group-hover:bg-teal-600 group-hover:text-white transition-all duration-300 relative z-10">
-            <Send className="h-6 w-6" />
-          </div>
-          <div className="absolute top-0 right-0 w-24 h-24 bg-teal-500/5 rounded-full blur-2xl group-hover:bg-teal-500/10 transition-colors" />
+        <div className="hidden md:flex text-6xl select-none mr-4">
+          🏢
         </div>
-
-        {/* Card 3: Disposisi Aktif */}
-        <div className="bg-white border border-slate-200 shadow-sm hover:shadow-md p-6 rounded-3xl flex items-center justify-between group relative overflow-hidden transition-all duration-300">
-          <div className="space-y-2 relative z-10">
-            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest font-bold">Disposisi Aktif</span>
-            <h3 className="text-3xl font-display font-extrabold text-slate-900 group-hover:scale-105 transition-transform duration-300 leading-none">{disposisiAktifCount}</h3>
-            <p className="text-xs text-slate-500 flex items-center gap-1">
-              <span className="text-amber-600 font-bold font-mono">{disposisiAktifCount} tugas</span>
-              <span>Sedang dipantau</span>
-            </p>
-          </div>
-          <div className="p-4 bg-amber-50 rounded-2xl text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-all duration-300 relative z-10">
-            <Clock className="h-6 w-6" />
-          </div>
-          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl group-hover:bg-amber-500/10 transition-colors" />
-        </div>
-
-        {/* Card 4: Disposisi Selesai */}
-        <div className="bg-white border border-slate-200 shadow-sm hover:shadow-md p-6 rounded-3xl flex items-center justify-between group relative overflow-hidden transition-all duration-300">
-          <div className="space-y-2 relative z-10">
-            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest font-bold">Tugas Selesai</span>
-            <h3 className="text-3xl font-display font-extrabold text-slate-900 group-hover:scale-105 transition-transform duration-300 leading-none">{disposisiSelesaiCount}</h3>
-            <p className="text-xs text-slate-500 flex items-center gap-1">
-              <span className="text-emerald-600 font-bold font-mono">↑ Selesai</span>
-              <span>Tindak lanjut sukses</span>
-            </p>
-          </div>
-          <div className="p-4 bg-emerald-50 rounded-2xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300 relative z-10">
-            <CheckCircle className="h-6 w-6" />
-          </div>
-          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors" />
-        </div>
-
       </div>
 
-      {/* Analytics & Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Grid Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
-        {/* Left widget: Weekly letters trend (CSS Visual Bar Chart) */}
-        <div className="bg-white border border-slate-200 shadow-sm p-6 rounded-3xl lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <h4 className="text-sm font-bold text-slate-800 font-display">Tren Registrasi Surat Mingguan</h4>
-              <p className="text-xs text-slate-400">Jumlah surat masuk dan keluar 5 hari terakhir.</p>
-            </div>
-            <div className="flex gap-4 text-xs">
-              <div className="flex items-center gap-1.5 text-emerald-600 font-bold">
-                <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
-                <span>Masuk</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-teal-600 font-bold">
-                <span className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse" />
-                <span>Keluar</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Graphical Proportional Bars */}
-          <div className="h-64 flex items-end justify-between px-4 pt-4 border-b border-slate-100 font-sans">
-            {[
-              { day: 'Sen', masuk: 3, keluar: 1 },
-              { day: 'Sel', masuk: 2, keluar: 2 },
-              { day: 'Rab', masuk: 4, keluar: 0 },
-              { day: 'Kam', masuk: 1, keluar: 1 },
-              { day: 'Jum', masuk: 2, keluar: 1 },
-            ].map((dayData, idx) => (
-              <div key={idx} className="flex flex-col items-center gap-3 w-1/5">
-                <div className="flex items-end gap-2 h-44">
-                  {/* Masuk Bar */}
-                  <div className="relative group flex flex-col items-center">
-                    <span className="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 bg-slate-900 border border-slate-800 text-[10px] text-emerald-300 font-mono font-bold px-1.5 py-0.5 rounded transition-all duration-200 whitespace-nowrap z-10">
-                      {dayData.masuk} Surat
-                    </span>
-                    <div 
-                      style={{ height: `${dayData.masuk * 28}px` }} 
-                      className="w-4 sm:w-6 bg-gradient-to-t from-emerald-600 to-emerald-400 rounded-t-lg shadow-lg shadow-emerald-500/15 cursor-pointer hover:from-emerald-400 hover:to-emerald-300 transition-all duration-300"
-                    />
-                  </div>
-                  {/* Keluar Bar */}
-                  <div className="relative group flex flex-col items-center">
-                    <span className="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 bg-slate-900 border border-slate-800 text-[10px] text-teal-300 font-mono font-bold px-1.5 py-0.5 rounded transition-all duration-200 whitespace-nowrap z-10">
-                      {dayData.keluar} Surat
-                    </span>
-                    <div 
-                      style={{ height: `${dayData.keluar * 28}px` }} 
-                      className="w-4 sm:w-6 bg-gradient-to-t from-teal-600 to-teal-400 rounded-t-lg shadow-lg shadow-teal-500/15 cursor-pointer hover:from-teal-400 hover:to-teal-300 transition-all duration-300"
-                    />
-                  </div>
-                </div>
-                <span className="text-xs text-slate-500 font-semibold font-mono">{dayData.day}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right widget: Classification Distribution Ratio */}
-        <div className="bg-white border border-slate-200 shadow-sm p-6 rounded-3xl flex flex-col justify-between space-y-6">
+        {/* Surat Masuk Card */}
+        <div 
+          onClick={() => setActiveTab('surat-masuk')}
+          className="bg-white rounded-2xl p-5 border border-slate-150 hover:border-emerald-500/30 hover:shadow-lg transition-all cursor-pointer flex items-center justify-between"
+        >
           <div className="space-y-1">
-            <h4 className="text-sm font-bold text-slate-800 font-display">Klasifikasi Arsip Surat</h4>
-            <p className="text-xs text-slate-400">Distribusi berdasarkan bidang administrasi.</p>
+            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-bold">Surat Masuk</span>
+            <h3 className="text-2xl font-black text-slate-800">{totalMasuk}</h3>
+            <span className="text-[10px] text-slate-500 font-medium block">Teregistrasi di arsip</span>
           </div>
-
-          {/* Simple Ratio Bars */}
-          <div className="space-y-4 flex-1 flex flex-col justify-center">
-            {Object.entries(classificationStats).map(([key, value]) => {
-              const maxVal = Math.max(...Object.values(classificationStats)) || 1;
-              const percentage = Math.round((value / totalMasuk) * 100) || 0;
-              return (
-                <div key={key} className="space-y-2">
-                  <div className="flex items-center justify-between text-xs font-semibold">
-                    <span className="text-slate-700 font-sans">{key}</span>
-                    <span className="text-slate-500 font-mono">{value} surat ({percentage}%)</span>
-                  </div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div 
-                      style={{ width: `${(value / maxVal) * 100}%` }}
-                      className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
-                    />
-                  </div>
-                </div>
-              );
-            })}
+          <div className="h-11 w-11 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+            <Inbox className="h-5 w-5" />
           </div>
+        </div>
 
-          <div className="pt-3 border-t border-slate-100 text-center">
-            <span className="text-[10px] text-slate-400 font-mono uppercase tracking-wider font-semibold">Total Klasifikasi: {totalMasuk} Dokumen</span>
+        {/* Surat Keluar Card */}
+        <div 
+          onClick={() => {
+            if (['Super Admin', 'Admin Persuratan', 'Pimpinan'].includes(currentRole)) {
+              setActiveTab('surat-keluar');
+            }
+          }}
+          className="bg-white rounded-2xl p-5 border border-slate-150 hover:border-blue-500/30 hover:shadow-lg transition-all cursor-pointer flex items-center justify-between"
+        >
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-bold">Surat Keluar</span>
+            <h3 className="text-2xl font-black text-slate-800">{totalKeluar}</h3>
+            <span className="text-[10px] text-slate-500 font-medium block">Pengiriman & draf</span>
+          </div>
+          <div className="h-11 w-11 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+            <Send className="h-5 w-5" />
+          </div>
+        </div>
+
+        {/* Disposisi Card */}
+        <div 
+          onClick={() => setActiveTab('disposisi')}
+          className="bg-white rounded-2xl p-5 border border-slate-150 hover:border-purple-500/30 hover:shadow-lg transition-all cursor-pointer flex items-center justify-between"
+        >
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-bold">Lembar Disposisi</span>
+            <h3 className="text-2xl font-black text-slate-800">{totalDisp}</h3>
+            <span className="text-[10px] text-amber-600 font-semibold block">{pendingDisp + progressDisp} Butuh Tindakan</span>
+          </div>
+          <div className="h-11 w-11 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
+            <FileCheck className="h-5 w-5" />
+          </div>
+        </div>
+
+        {/* Pegawai Card */}
+        <div 
+          onClick={() => {
+            if (['Super Admin', 'Admin Persuratan', 'Pimpinan'].includes(currentRole)) {
+              setActiveTab('pengguna');
+            }
+          }}
+          className="bg-white rounded-2xl p-5 border border-slate-150 hover:border-indigo-500/30 hover:shadow-lg transition-all cursor-pointer flex items-center justify-between"
+        >
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-bold">Daftar Pegawai</span>
+            <h3 className="text-2xl font-black text-slate-800">{totalUsers}</h3>
+            <span className="text-[10px] text-slate-500 font-medium block">Akun aktif terdaftar</span>
+          </div>
+          <div className="h-11 w-11 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+            <Users className="h-5 w-5" />
           </div>
         </div>
 
       </div>
 
-      {/* Tables Section: Latest letters and urgent dispositions */}
+      {/* Main Charts and Status Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Left: Latest Letters list */}
-        <div className="bg-white border border-slate-200 shadow-sm p-6 rounded-3xl lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-bold text-slate-800 font-display">Surat Masuk Terbaru</h4>
-            <button 
-              id="dashboard-go-surat-masuk"
-              onClick={() => onNavigate('surat-masuk')}
-              className="text-xs text-emerald-600 hover:text-emerald-700 font-bold flex items-center gap-1 transition-colors"
-            >
-              <span>Semua Surat</span>
-              <ArrowRight className="h-4 w-4" />
-            </button>
+        {/* Letter Flow Charts */}
+        <div className="lg:col-span-2 bg-white rounded-2xl p-5 border border-slate-150 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4.5 w-4.5 text-emerald-600" />
+              <h3 className="text-xs font-bold text-slate-800">Distribusi Surat Berdasarkan Klasifikasi</h3>
+            </div>
+            <span className="text-[10px] text-slate-400 font-mono">STATISTIK KLASIFIKASI</span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600 border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100 text-slate-400 font-mono font-bold">
-                  <th className="py-3 px-2">Nomor Surat</th>
-                  <th className="py-3 px-2">Pengirim</th>
-                  <th className="py-3 px-2">Perihal</th>
-                  <th className="py-3 px-2">Sifat</th>
-                  <th className="py-3 px-2 text-right">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {latestSuratMasuk.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3.5 px-2 font-mono text-emerald-600 font-bold whitespace-nowrap">{item.nomorSurat}</td>
-                    <td className="py-3.5 px-2 font-sans text-slate-800 truncate max-w-[120px]">{item.asalSurat}</td>
-                    <td className="py-3.5 px-2 font-sans text-slate-600 truncate max-w-[180px]" title={item.perihal}>{item.perihal}</td>
-                    <td className="py-3.5 px-2">
-                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${getSifatBadgeColor(item.sifat)}`}>
-                        {item.sifat}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-2 text-right">
-                      <button
-                        id={`btn-view-sm-dash-${item.id}`}
-                        onClick={() => onViewLetter(item.id, 'Masuk')}
-                        className="text-emerald-600 hover:text-emerald-700 font-bold"
-                      >
-                        Detail
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={chartData}
+                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="name" 
+                  tick={{ fill: '#64748b', fontSize: 10, fontWeight: 500 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis 
+                  tick={{ fill: '#64748b', fontSize: 10, fontWeight: 500 }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#fff', 
+                    borderRadius: '12px', 
+                    border: '1px solid #e2e8f0', 
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)',
+                    fontSize: '11px'
+                  }} 
+                />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
+                <Bar dataKey="Surat Masuk" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Surat Keluar" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Right: Urgent Active Dispositions */}
-        <div className="bg-white border border-slate-200 shadow-sm p-6 rounded-3xl space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-bold text-slate-800 font-display">Disposisi Mendesak</h4>
-            <button 
-              id="dashboard-go-disposisi"
-              onClick={() => onNavigate('disposisi')}
-              className="text-xs text-emerald-600 hover:text-emerald-700 font-bold flex items-center gap-1 transition-colors"
-            >
-              <span>Semua Tugas</span>
-              <ArrowRight className="h-4 w-4" />
-            </button>
+        {/* Disposisi Task Progress */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-150 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4.5 w-4.5 text-purple-600" />
+                <h3 className="text-xs font-bold text-slate-800">Status Tugas Disposisi</h3>
+              </div>
+              <span className="text-[10px] text-slate-400 font-mono">PROGRES KERJA</span>
+            </div>
+
+            <div className="space-y-3">
+              {/* Menunggu */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-2 w-2 bg-amber-500 rounded-full" />
+                  <span className="text-[11px] font-semibold text-slate-600">Menunggu Tindakan</span>
+                </div>
+                <span className="text-xs font-bold text-slate-800">{pendingDisp}</span>
+              </div>
+
+              {/* Sedang Dikerjakan */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-2 w-2 bg-blue-500 rounded-full" />
+                  <span className="text-[11px] font-semibold text-slate-600">Sedang Diproses</span>
+                </div>
+                <span className="text-xs font-bold text-slate-800">{progressDisp}</span>
+              </div>
+
+              {/* Selesai */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-2 w-2 bg-emerald-500 rounded-full" />
+                  <span className="text-[11px] font-semibold text-slate-600">Selesai & Dilaporkan</span>
+                </div>
+                <span className="text-xs font-bold text-slate-800">{completedDisp}</span>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-3 max-h-[290px] overflow-y-auto pr-1">
-            {urgentDisposisi.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 text-xs">
-                Tidak ada disposisi aktif yang mendesak.
-              </div>
-            ) : (
-              urgentDisposisi.map((item) => {
-                const matchSurat = suratMasuk.find(s => s.id === item.suratMasukId);
-                const pelaksanaNames = item.pelaksanaIds.map(id => users.find(u => u.id === id)?.nama.split(',')[0]).join(', ');
-                
-                return (
-                  <div 
-                    key={item.id} 
-                    className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-start gap-3 hover:border-emerald-500/25 hover:bg-emerald-50/10 transition-all cursor-pointer shadow-sm"
-                    onClick={() => {
-                      if (matchSurat) onViewLetter(matchSurat.id, 'Masuk');
-                    }}
-                  >
-                    <div className="p-2 bg-rose-50 text-rose-600 border border-rose-100 rounded-lg shrink-0 mt-0.5">
-                      <AlertTriangle className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-mono text-rose-600 font-bold uppercase tracking-wider">Tenggat: {item.tenggatWaktu}</span>
-                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold border ${
-                          item.status === 'Menunggu' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'
-                        }`}>
-                          {item.status}
-                        </span>
-                      </div>
-                      <p className="text-xs font-bold text-slate-800 mt-1.5 truncate">{matchSurat?.perihal || 'Perihal surat...'}</p>
-                      <p className="text-[10px] text-slate-500 font-medium mt-1 truncate">Pelaksana: {pelaksanaNames}</p>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+          <div className="pt-4 border-t border-slate-100 mt-4 text-center">
+            <button
+              id="dashboard-view-disposisi-shortcut"
+              onClick={() => setActiveTab('disposisi')}
+              className="text-[11px] font-bold text-purple-600 hover:text-purple-700 transition-all cursor-pointer inline-flex items-center gap-1"
+            >
+              Buka Lembar Disposisi &rarr;
+            </button>
           </div>
         </div>
 
       </div>
+
+      {/* Audit Trail Timeline */}
+      <div className="bg-white rounded-2xl p-5 border border-slate-150">
+        <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4.5 w-4.5 text-slate-500" />
+            <h3 className="text-xs font-bold text-slate-800">Riwayat Aktivitas Log (Audit Trail)</h3>
+          </div>
+          <span className="text-[10px] text-slate-400 font-mono bg-slate-100 px-2 py-0.5 rounded-md font-bold">REAL-TIME LOG</span>
+        </div>
+
+        <div className="space-y-3.5 max-h-60 overflow-y-auto pr-1">
+          {auditTrail.length === 0 ? (
+            <div className="p-8 text-center text-slate-400">
+              <FileSpreadsheet className="h-8 w-8 text-slate-200 mx-auto mb-2" />
+              <p className="text-xs">Belum ada riwayat aktivitas tercatat.</p>
+            </div>
+          ) : (
+            auditTrail.slice().reverse().map((item) => (
+              <div key={item.id} className="flex gap-4 group text-left">
+                <div className="flex flex-col items-center">
+                  <div className="h-2 w-2 bg-slate-400 rounded-full group-hover:bg-emerald-500 transition-all mt-1.5" />
+                  <div className="w-[1px] bg-slate-200 grow group-last:bg-transparent mt-1" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[10px] font-bold text-slate-800">{item.action}</span>
+                    <span className="text-[9px] text-slate-400 font-mono">
+                      {new Date(item.timestamp).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
+                    {item.description}
+                  </p>
+                  <span className="text-[9px] font-medium text-slate-400 block mt-0.5">
+                    Oleh: {item.namaUser}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
     </div>
   );
 }

@@ -1,48 +1,44 @@
-import { useState, Dispatch, SetStateAction } from 'react';
+import React, { useState, FormEvent } from 'react';
 import { 
   Plus, 
   Search, 
-  Filter, 
-  FileText, 
   Trash2, 
-  ArrowRight,
-  History,
+  CheckCircle, 
+  ArrowRight, 
+  Info, 
+  AlertCircle, 
+  CheckCircle2, 
+  X,
+  FileText,
   Send,
-  Info,
-  AlertCircle,
-  CheckCircle2,
-  X
+  Inbox
 } from 'lucide-react';
-import { SuratKeluar, SifatSurat, KlasifikasiSurat, UserRole, User } from '../types';
+import { SuratKeluar, SifatSurat, KlasifikasiSurat, UserRole } from '../types';
 import Modal from '../components/Modal';
-import Timeline from '../components/Timeline';
 
 interface SuratKeluarProps {
   suratKeluar: SuratKeluar[];
-  setSuratKeluar: Dispatch<SetStateAction<SuratKeluar[]>>;
-  onAddAuditLog: (suratId: string, action: string, description: string) => void;
+  setSuratKeluar: React.Dispatch<React.SetStateAction<SuratKeluar[]>>;
   currentRole: UserRole;
-  auditTrail: any[];
+  onAddAuditLog: (action: string, description: string) => void;
 }
 
 export default function SuratKeluarPage({
   suratKeluar,
   setSuratKeluar,
-  onAddAuditLog,
   currentRole,
-  auditTrail
+  onAddAuditLog
 }: SuratKeluarProps) {
   
-  // Search and Filter State
+  // Filtering states
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSifat, setFilterSifat] = useState<string>('Semua');
   const [filterKlasifikasi, setFilterKlasifikasi] = useState<string>('Semua');
-  const [filterStatus, setFilterStatus] = useState<string>('Semua');
 
-  // Selected letter for viewing
+  // Selected letter for viewing details
   const [selectedLetterId, setSelectedLetterId] = useState<string | null>(null);
 
-  // New letter form modal state & feedback
+  // New letter form state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newNoSurat, setNewNoSurat] = useState('');
   const [newTglSurat, setNewTglSurat] = useState('');
@@ -63,18 +59,20 @@ export default function SuratKeluarPage({
     setTimeout(() => setToast(null), 4000);
   };
 
+  // Determine permissions
+  const canAddLetter = currentRole === 'Super Admin' || currentRole === 'Admin Persuratan';
+
   // Filtering data
   const filteredData = suratKeluar.filter((item) => {
     const matchesSearch = 
       item.nomorSurat.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.perihal.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.tujuan.toLowerCase().includes(searchQuery.toLowerCase());
+      item.tujuan.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.perihal.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesSifat = filterSifat === 'Semua' || item.sifat === filterSifat;
     const matchesKlasifikasi = filterKlasifikasi === 'Semua' || item.klasifikasi === filterKlasifikasi;
-    const matchesStatus = filterStatus === 'Semua' || item.status === filterStatus;
 
-    return matchesSearch && matchesSifat && matchesKlasifikasi && matchesStatus;
+    return matchesSearch && matchesSifat && matchesKlasifikasi;
   });
 
   const selectedLetter = suratKeluar.find(l => l.id === selectedLetterId);
@@ -95,24 +93,24 @@ export default function SuratKeluarPage({
       klasifikasi: newKlasifikasi,
       status: actionType === 'Kirim' ? 'Dikirim' : 'Draft',
       tembusan: newTembusan.trim() || undefined,
-      lampiran: newLampiranName || undefined
+      lampiran: newLampiranName.trim() || undefined,
+      fileUrl: newLampiranName.trim() ? `${newLampiranName.trim().replace(/\s+/g, '_')}.pdf` : undefined
     };
 
-    setSuratKeluar(prev => [newLetter, ...prev]);
+    setSuratKeluar(prev => [...prev, newLetter]);
     setIsAddModalOpen(false);
     setFormError(null);
 
     // Add Audit Log
     onAddAuditLog(
-      newLetter.id,
-      actionType === 'Kirim' ? 'Registrasi & Pengiriman' : 'Registrasi Draf Keluar',
+      'Registrasi Surat Keluar',
       `Mendaftarkan surat keluar baru nomor ${newLetter.nomorSurat} ditujukan ke ${newLetter.tujuan}. Status: ${newLetter.status}`
     );
 
     triggerToast(
       actionType === 'Kirim' 
         ? `Surat keluar ${newLetter.nomorSurat} berhasil disimpan dan dikirim!`
-        : `Surat keluar draf ${newLetter.nomorSurat} berhasil disimpan!`,
+        : `Surat draf ${newLetter.nomorSurat} berhasil disimpan!`,
       'success'
     );
 
@@ -145,170 +143,180 @@ export default function SuratKeluarPage({
 
   const handleSendLetter = (letter: SuratKeluar) => {
     setSuratKeluar(prev => prev.map(l => l.id === letter.id ? { ...l, status: 'Dikirim' } : l));
+    
     onAddAuditLog(
-      letter.id,
-      'Pengiriman Resmi',
-      `Surat resmi Keluar nomor ${letter.nomorSurat} telah berhasil dikirimkan ke tujuan: ${letter.tujuan}.`
+      'Pengiriman Surat Keluar',
+      `Mengubah status draf surat keluar nomor ${letter.nomorSurat} menjadi dikirim ke tujuan: ${letter.tujuan}.`
     );
+
     triggerToast(`Surat nomor ${letter.nomorSurat} berhasil dikirim ke tujuan!`, 'success');
   };
 
   const getSifatBadgeColor = (sifat: SifatSurat) => {
     switch (sifat) {
-      case 'Penting': return 'bg-rose-50 text-rose-700 border-rose-150';
-      case 'Rahasia': return 'bg-pink-50 text-pink-700 border-pink-150';
-      default: return 'bg-emerald-50 text-emerald-700 border-emerald-150';
-    }
-  };
-
-  const getStatusBadgeColor = (status: string) => {
-    switch (status) {
-      case 'Dikirim': return 'bg-emerald-50 text-emerald-700 border-emerald-150';
+      case 'Sangat Segera': return 'bg-rose-50 text-rose-700 border-rose-150';
+      case 'Rahasia': return 'bg-amber-50 text-amber-700 border-amber-150';
+      case 'Penting': return 'bg-blue-50 text-blue-700 border-blue-150';
       default: return 'bg-slate-100 text-slate-700 border-slate-200';
     }
   };
 
-  const canAddLetter = currentRole === 'Super Admin' || currentRole === 'Admin Persuratan';
-
   return (
     <div className="space-y-6">
       
-      {/* Search and Filters Header */}
-      <div className="bg-white border border-slate-200 shadow-sm p-5 rounded-3xl space-y-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        
-        {/* Search */}
-        <div className="relative max-w-xs w-full">
+      {/* Search & Filter Header */}
+      <div className="bg-white rounded-2xl p-5 border border-slate-150 flex flex-col md:flex-row gap-4 items-center justify-between shadow-sm">
+        <div className="relative w-full md:max-w-xs">
+          <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-400" />
           <input
-            id="search-input-surat-keluar"
+            id="input-search-surat-keluar"
             type="text"
-            placeholder="Cari surat keluar..."
+            placeholder="Cari nomor, tujuan, perihal..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 text-slate-800 py-2 pl-9 pr-4 rounded-xl text-xs focus:border-emerald-500/50 focus:outline-none transition-colors"
+            className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-emerald-500 rounded-xl py-2 pl-10 pr-4 text-xs font-semibold focus:ring-1 focus:ring-emerald-500/20 outline-none transition-all"
           />
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
         </div>
 
-        {/* Dropdown Filters */}
-        <div className="flex flex-wrap items-center gap-3">
-          
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-sans font-bold">
-            <Filter className="h-3.5 w-3.5 text-slate-400" />
-            <span>Saring:</span>
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          {/* Sifat filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-slate-400 font-mono font-bold uppercase">Sifat:</span>
+            <select
+              id="filter-sifat-select-sk"
+              value={filterSifat}
+              onChange={(e) => setFilterSifat(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold px-2.5 py-1.5 focus:border-emerald-500 outline-none transition-all cursor-pointer"
+            >
+              <option value="Semua">Semua Sifat</option>
+              <option value="Biasa">Biasa</option>
+              <option value="Penting">Penting</option>
+              <option value="Rahasia">Rahasia</option>
+              <option value="Sangat Segera">Sangat Segera</option>
+            </select>
           </div>
 
-          <select
-            id="filter-sk-sifat"
-            value={filterSifat}
-            onChange={(e) => setFilterSifat(e.target.value)}
-            className="bg-slate-50 text-slate-700 border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:border-emerald-500 focus:outline-none transition-colors font-semibold"
-          >
-            <option value="Semua">Semua Sifat</option>
-            <option value="Biasa">Biasa</option>
-            <option value="Penting">Penting</option>
-            <option value="Rahasia">Rahasia</option>
-          </select>
+          {/* Klasifikasi filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-slate-400 font-mono font-bold uppercase">Klasifikasi:</span>
+            <select
+              id="filter-klasifikasi-select-sk"
+              value={filterKlasifikasi}
+              onChange={(e) => setFilterKlasifikasi(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold px-2.5 py-1.5 focus:border-emerald-500 outline-none transition-all cursor-pointer"
+            >
+              <option value="Semua">Semua Klasifikasi</option>
+              <option value="Umum">Umum</option>
+              <option value="Keuangan">Keuangan</option>
+              <option value="Kepegawaian">Kepegawaian</option>
+              <option value="Hukum">Hukum</option>
+              <option value="Sarpras">Sarpras</option>
+            </select>
+          </div>
 
-          <select
-            id="filter-sk-klasifikasi"
-            value={filterKlasifikasi}
-            onChange={(e) => setFilterKlasifikasi(e.target.value)}
-            className="bg-slate-50 text-slate-700 border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:border-emerald-500 focus:outline-none transition-colors font-semibold"
-          >
-            <option value="Semua">Semua Klasifikasi</option>
-            <option value="Umum">Umum</option>
-            <option value="Keuangan">Keuangan</option>
-            <option value="Kepegawaian">Kepegawaian</option>
-            <option value="Akademik">Akademik</option>
-          </select>
-
-          <select
-            id="filter-sk-status"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="bg-slate-50 text-slate-700 border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:border-emerald-500 focus:outline-none transition-colors font-semibold"
-          >
-            <option value="Semua">Semua Status</option>
-            <option value="Draft">Draft</option>
-            <option value="Dikirim">Dikirim</option>
-          </select>
-
+          {/* Add Letter Button */}
           {canAddLetter && (
             <button
-              id="btn-add-surat-keluar"
+              id="btn-trigger-add-letter-keluar"
               onClick={() => setIsAddModalOpen(true)}
-              className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md shadow-emerald-600/10 cursor-pointer transition-all shrink-0 ml-auto md:ml-0"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-emerald-600/10 ml-auto md:ml-0"
             >
               <Plus className="h-4 w-4" />
               <span>Registrasi Surat Keluar</span>
             </button>
           )}
-
         </div>
       </div>
 
-      {/* Main Content Layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      {/* Main Layout: Table Grid + Detail View Panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         
-        {/* Left: Table List */}
-        <div className={`bg-white border border-slate-200 shadow-sm p-6 rounded-3xl overflow-hidden transition-all ${selectedLetter ? 'xl:col-span-2' : 'xl:col-span-3'}`}>
+        {/* Table Listing */}
+        <div className={`bg-white rounded-2xl border border-slate-150 overflow-hidden shadow-sm transition-all duration-300 ${selectedLetterId ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600 border-collapse">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-100 text-slate-400 font-mono uppercase tracking-wider font-bold">
-                  <th className="py-3 px-3">Nomor Surat</th>
-                  <th className="py-3 px-3">Tanggal Surat</th>
-                  <th className="py-3 px-3">Tujuan Surat</th>
-                  <th className="py-3 px-3">Perihal</th>
-                  <th className="py-3 px-3">Sifat</th>
-                  <th className="py-3 px-3">Status</th>
-                  <th className="py-3 px-3 text-right font-bold">Aksi</th>
+                <tr className="bg-slate-50 border-b border-slate-150">
+                  <th className="py-3 px-4 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">No. Surat / Tujuan</th>
+                  <th className="py-3 px-3 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider hidden md:table-cell">Perihal</th>
+                  <th className="py-3 px-3 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider text-center">Sifat / Klasifikasi</th>
+                  <th className="py-3 px-3 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider text-center">Status</th>
+                  <th className="py-3 px-4 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredData.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400 text-xs">
-                      Tidak ditemukan surat keluar yang cocok dengan kriteria saringan.
+                    <td colSpan={5} className="py-12 text-center text-slate-400">
+                      <Inbox className="h-9 w-9 text-slate-300 mx-auto mb-2" />
+                      <p className="text-xs">Tidak ditemukan surat keluar yang sesuai filter.</p>
                     </td>
                   </tr>
                 ) : (
                   filteredData.map((item) => (
                     <tr 
-                      key={item.id} 
-                      className={`hover:bg-slate-50 transition-colors cursor-pointer ${
-                        selectedLetterId === item.id ? 'bg-emerald-50/40' : ''
-                      }`}
+                      key={item.id}
                       onClick={() => setSelectedLetterId(item.id)}
+                      className={`hover:bg-slate-50/50 transition-all cursor-pointer ${
+                        selectedLetterId === item.id ? 'bg-emerald-50/30' : ''
+                      }`}
                     >
-                      <td className="py-4 px-3 font-mono text-emerald-600 font-bold whitespace-nowrap">{item.nomorSurat}</td>
-                      <td className="py-4 px-3 font-sans text-slate-500 whitespace-nowrap">{item.tanggalSurat}</td>
-                      <td className="py-4 px-3 font-sans font-bold text-slate-800 truncate max-w-[140px]" title={item.tujuan}>{item.tujuan}</td>
-                      <td className="py-4 px-3 font-sans text-slate-600 truncate max-w-[200px]" title={item.perihal}>{item.perihal}</td>
-                      <td className="py-4 px-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${getSifatBadgeColor(item.sifat)}`}>
-                          {item.sifat}
+                      <td className="py-4 px-4">
+                        <div className="font-bold text-slate-800 text-[11px] hover:text-emerald-600 transition-colors">
+                          {item.nomorSurat}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-medium truncate max-w-[180px] md:max-w-[240px] mt-0.5">
+                          {item.tujuan}
+                        </div>
+                        <span className="text-[9px] text-slate-400 font-mono mt-1 block">
+                          Tanggal Surat: {item.tanggalSurat}
                         </span>
                       </td>
-                      <td className="py-4 px-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${getStatusBadgeColor(item.status)}`}>
+                      <td className="py-4 px-3 hidden md:table-cell">
+                        <p className="text-[11px] text-slate-600 font-medium line-clamp-2 leading-relaxed">
+                          {item.perihal}
+                        </p>
+                      </td>
+                      <td className="py-4 px-3 text-center">
+                        <div className="flex flex-col gap-1 items-center">
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${getSifatBadgeColor(item.sifat)}`}>
+                            {item.sifat}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-mono">
+                            {item.klasifikasi}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-3 text-center">
+                        <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                          item.status === 'Draft' 
+                            ? 'bg-slate-100 text-slate-600 border-slate-200' 
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-150'
+                        }`}>
                           {item.status}
                         </span>
                       </td>
-                      <td className="py-4 px-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            id={`btn-view-sk-${item.id}`}
-                            onClick={() => setSelectedLetterId(item.id)}
-                            className="text-emerald-600 hover:text-emerald-700 font-bold text-xs whitespace-nowrap"
-                          >
-                            Detail
-                          </button>
+                      <td className="py-4 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* Send/Kirim Button for draft letters */}
+                          {item.status === 'Draft' && canAddLetter && (
+                            <button
+                              id={`btn-send-letter-${item.id}`}
+                              onClick={() => handleSendLetter(item)}
+                              className="text-blue-600 hover:text-blue-700 p-1.5 rounded-lg hover:bg-blue-50 transition-all border border-transparent hover:border-blue-150 flex items-center gap-1 text-[10px] font-bold cursor-pointer"
+                              title="Kirim Resmi"
+                            >
+                              <span>Kirim</span>
+                              <Send className="h-3 w-3" />
+                            </button>
+                          )}
+                          
+                          {/* Delete Button */}
                           {canAddLetter && (
                             <button
                               id={`btn-delete-sk-${item.id}`}
                               onClick={() => handleDeleteLetter(item)}
-                              className="text-rose-600 hover:text-rose-700 p-1 rounded-lg hover:bg-rose-50 transition-all"
+                              className="text-rose-600 hover:text-rose-700 p-1 rounded-lg hover:bg-rose-50 transition-all cursor-pointer"
                               title="Hapus"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -324,85 +332,108 @@ export default function SuratKeluarPage({
           </div>
         </div>
 
-        {/* Right: Side Panel dossier detail */}
-        {selectedLetter && (
-          <div className="bg-white border border-slate-200 shadow-lg p-6 rounded-3xl space-y-6 animate-in slide-in-from-right-10 duration-300 text-left">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <h4 className="font-display font-extrabold text-sm text-emerald-700">Dossier Surat Keluar</h4>
-              <button 
-                id="btn-close-sk-dossier"
-                onClick={() => setSelectedLetterId(null)}
-                className="text-xs text-slate-400 hover:text-slate-600 font-bold"
-              >
-                Tutup dossier
-              </button>
-            </div>
-
-            {/* Info */}
-            <div className="space-y-4">
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Nomor Surat Resmi</span>
-                <p className="text-sm font-mono font-bold text-slate-800">{selectedLetter.nomorSurat}</p>
-              </div>
-
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Perihal</span>
-                <p className="text-xs font-bold text-slate-800 leading-relaxed">{selectedLetter.perihal}</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Tanggal Surat</span>
-                  <p className="text-xs text-slate-600 font-semibold">{selectedLetter.tanggalSurat}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Tujuan Penerima</span>
-                  <p className="text-xs text-slate-600 font-bold">{selectedLetter.tujuan}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Klasifikasi</span>
-                  <p className="text-xs text-slate-600 font-semibold">{selectedLetter.klasifikasi}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Tembusan</span>
-                  <p className="text-xs text-slate-500 font-semibold italic truncate max-w-[120px]">{selectedLetter.tembusan || '-'}</p>
-                </div>
-              </div>
-
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Sifat Sifat</span>
-                <div className="mt-1">
-                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${getSifatBadgeColor(selectedLetter.sifat)}`}>
-                    {selectedLetter.sifat}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Direct Send button if still in Draft */}
-            {selectedLetter.status === 'Draft' && canAddLetter && (
+        {/* Detail Viewer Panel */}
+        {selectedLetterId && selectedLetter && (
+          <div className="bg-white rounded-2xl border border-slate-150 p-5 shadow-sm space-y-4 animate-fade-in text-left">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-xs font-bold text-slate-800">Detail Surat Keluar</h3>
               <button
-                id="btn-send-sk-dossier"
-                onClick={() => handleSendLetter(selectedLetter)}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/10 cursor-pointer transition-all"
+                id="btn-close-detail-panel-sk"
+                onClick={() => setSelectedLetterId(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-lg transition-all"
               >
-                <Send className="h-4 w-4" />
-                <span>Kirim Surat Resmi</span>
+                <X className="h-4 w-4" />
               </button>
-            )}
-
-            {/* Deep Activity Timeline */}
-            <div className="border-t border-slate-100 pt-4 space-y-3">
-              <div className="flex items-center gap-1 text-slate-500 font-bold">
-                <History className="h-4 w-4 text-slate-400" />
-                <span className="text-[10px] font-mono uppercase tracking-wider">Timeline Pengiriman</span>
-              </div>
-              <Timeline auditTrail={auditTrail} suratId={selectedLetter.id} />
             </div>
 
+            <div className="space-y-3">
+              <div>
+                <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold">Nomor Surat Resmi</span>
+                <p className="text-xs font-black text-slate-800 mt-0.5">{selectedLetter.nomorSurat}</p>
+              </div>
+
+              <div>
+                <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold">Instansi Tujuan</span>
+                <p className="text-[11px] font-bold text-slate-700 mt-0.5 leading-relaxed">{selectedLetter.tujuan}</p>
+              </div>
+
+              <div>
+                <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold">Perihal Surat</span>
+                <p className="text-[11px] font-semibold text-slate-600 mt-0.5 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">{selectedLetter.perihal}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold">Tanggal Surat</span>
+                  <p className="text-[10px] font-bold text-slate-700 mt-0.5">{selectedLetter.tanggalSurat}</p>
+                </div>
+                <div>
+                  <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold">Status</span>
+                  <p className="text-[10px] font-bold text-slate-700 mt-0.5">
+                    <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                      selectedLetter.status === 'Draft' ? 'bg-slate-100 border-slate-200' : 'bg-emerald-50 border-emerald-150 text-emerald-700'
+                    }`}>
+                      {selectedLetter.status}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div>
+                  <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold">Sifat Surat</span>
+                  <p className="mt-1">
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${getSifatBadgeColor(selectedLetter.sifat)}`}>
+                      {selectedLetter.sifat}
+                    </span>
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold">Klasifikasi Arsip</span>
+                  <p className="text-[10px] font-bold text-emerald-600 mt-1">{selectedLetter.klasifikasi}</p>
+                </div>
+              </div>
+
+              {selectedLetter.tembusan && (
+                <div>
+                  <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold">Tembusan Kepada</span>
+                  <p className="text-[10px] font-bold text-slate-600 mt-0.5 leading-relaxed">{selectedLetter.tembusan}</p>
+                </div>
+              )}
+
+              {selectedLetter.lampiran && (
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4.5 w-4.5 text-emerald-600" />
+                    <div className="min-w-0">
+                      <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold block">Arsip Lampiran</span>
+                      <p className="text-[10px] font-bold text-slate-700 truncate max-w-[150px]">{selectedLetter.lampiran}</p>
+                    </div>
+                  </div>
+                  <a
+                    href={`#`}
+                    onClick={(e) => { e.preventDefault(); alert(`Membuka berkas: ${selectedLetter.lampiran}`); }}
+                    className="text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-xl border border-slate-200 transition-all cursor-pointer"
+                  >
+                    Buka File
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            {selectedLetter.status === 'Draft' && canAddLetter && (
+              <div className="pt-4 border-t border-slate-100">
+                <button
+                  id="btn-detail-send-sk"
+                  onClick={() => handleSendLetter(selectedLetter)}
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold py-2.5 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/10"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  <span>Kirim Surat ke Tujuan Resmi</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -429,148 +460,136 @@ export default function SuratKeluarPage({
           <div>
             <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Nomor Surat Resmi</label>
             <input
-              id="form-sk-no"
+              id="input-nomor-surat-keluar"
               type="text"
-              placeholder="Contoh: 900/182/SPD/2026"
+              required
+              placeholder="Contoh: 090/512/DK/VI/2026"
               value={newNoSurat}
               onChange={(e) => setNewNoSurat(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3.5 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/20 focus:bg-white"
+              className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-emerald-500/10"
             />
           </div>
 
           <div>
-            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Tanggal Surat Keluar</label>
+            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Lembaga / Instansi Tujuan</label>
             <input
-              id="form-sk-tgl"
-              type="date"
-              value={newTglSurat}
-              onChange={(e) => setNewTglSurat(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3.5 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none focus:bg-white font-semibold"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Tujuan Instansi Penerima</label>
-            <input
-              id="form-sk-tujuan"
+              id="input-tujuan-surat-keluar"
               type="text"
-              placeholder="Contoh: Badan Pengelola Keuangan Daerah"
+              required
+              placeholder="Contoh: Pimpinan Cabang Bank BPD"
               value={newTujuan}
               onChange={(e) => setNewTujuan(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3.5 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:bg-white"
+              className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-emerald-500/10"
             />
           </div>
 
           <div>
-            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Perihal Surat</label>
-            <input
-              id="form-sk-perihal"
-              type="text"
-              placeholder="Contoh: Laporan Realisasi Penggunaan Anggaran..."
+            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Perihal / Isi Ringkas Surat</label>
+            <textarea
+              id="input-perihal-surat-keluar"
+              required
+              rows={3}
+              placeholder="Tulis ringkasan perihal isi pokok surat keluar..."
               value={newPerihal}
               onChange={(e) => setNewPerihal(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3.5 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:bg-white"
+              className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-emerald-500/10"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
+              <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Tanggal Surat</label>
+              <input
+                id="input-tgl-surat-keluar"
+                type="date"
+                value={newTglSurat}
+                onChange={(e) => setNewTglSurat(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-emerald-500/10"
+              />
+            </div>
+            <div>
               <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Sifat Surat</label>
               <select
-                id="form-sk-sifat"
+                id="select-sifat-keluar"
                 value={newSifat}
                 onChange={(e) => setNewSifat(e.target.value as SifatSurat)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:bg-white font-semibold"
+                className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs font-semibold outline-none cursor-pointer"
               >
                 <option value="Biasa">Biasa</option>
                 <option value="Penting">Penting</option>
                 <option value="Rahasia">Rahasia</option>
+                <option value="Sangat Segera">Sangat Segera</option>
               </select>
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Klasifikasi</label>
+              <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Klasifikasi Arsip</label>
               <select
-                id="form-sk-klasifikasi"
+                id="select-klasifikasi-keluar"
                 value={newKlasifikasi}
                 onChange={(e) => setNewKlasifikasi(e.target.value as KlasifikasiSurat)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:bg-white font-semibold"
+                className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs font-semibold outline-none cursor-pointer"
               >
                 <option value="Umum">Umum</option>
                 <option value="Keuangan">Keuangan</option>
                 <option value="Kepegawaian">Kepegawaian</option>
-                <option value="Akademik">Akademik</option>
+                <option value="Hukum">Hukum</option>
+                <option value="Sarpras">Sarpras</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Tembusan (Opsional)</label>
+              <input
+                id="input-tembusan-keluar"
+                type="text"
+                placeholder="Contoh: Sekretaris Daerah"
+                value={newTembusan}
+                onChange={(e) => setNewTembusan(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-emerald-500/10"
+              />
             </div>
           </div>
 
           <div>
-            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Tembusan Kepada</label>
+            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Dokumen Lampiran / Draf Berkas (PDF)</label>
             <input
-              id="form-sk-tembusan"
+              id="input-lampiran-keluar"
               type="text"
-              placeholder="Contoh: Kepala Subbagian Keuangan, Bidang IT (opsional)"
-              value={newTembusan}
-              onChange={(e) => setNewTembusan(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3.5 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:bg-white font-semibold"
+              placeholder="Contoh: Proposal_Kerjasama_E_Surat.pdf"
+              value={newLampiranName}
+              onChange={(e) => setNewLampiranName(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs font-semibold outline-none focus:ring-1 focus:ring-emerald-500/10"
             />
           </div>
 
-          {/* Lampiran */}
-          <div>
-            <label className="block text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Dokumen Lampiran (PDF / Word)</label>
-            <div className="border border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-emerald-500/40 transition-colors bg-slate-50 relative flex flex-col items-center justify-center gap-2">
-              <input
-                id="form-sk-lampiran-file"
-                type="file"
-                accept=".pdf,.doc,.docx"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    setNewLampiranName(e.target.files[0].name);
-                  }
-                }}
-                className="hidden"
-              />
-              <input
-                id="form-sk-lampiran-input"
-                type="text"
-                placeholder="Nama file pendukung (contoh: Surat_Undangan.docx)"
-                value={newLampiranName}
-                onChange={(e) => setNewLampiranName(e.target.value)}
-                className="w-full bg-transparent border-none text-slate-800 text-xs text-center focus:outline-none placeholder-slate-400 font-semibold"
-              />
-              <button
-                id="btn-select-file-sk"
-                type="button"
-                onClick={() => document.getElementById('form-sk-lampiran-file')?.click()}
-                className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-50 transition-all cursor-pointer"
-              >
-                Pilih Berkas PDF / Word
-              </button>
-              <span className="block text-[9px] text-slate-400 mt-1 font-medium">Anda dapat memilih berkas nyata atau mengetikkan nama berkas secara manual.</span>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 mt-6">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-150">
             <button
-              id="btn-sk-save-draft"
-              type="button"
+              id="btn-cancel-add-sk"
+              onClick={() => {
+                setIsAddModalOpen(false);
+                setFormError(null);
+              }}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer"
+            >
+              Batal
+            </button>
+            <button
+              id="btn-save-draft-sk"
               onClick={() => handleAddLetter('Draft')}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2.5 rounded-xl transition-all cursor-pointer"
+              className="bg-slate-200 hover:bg-slate-350 text-slate-700 text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer"
             >
-              Simpan Draft
+              Simpan Sebagai Draf
             </button>
             <button
-              id="btn-sk-save-send"
-              type="button"
+              id="btn-confirm-add-sk"
               onClick={() => handleAddLetter('Kirim')}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-emerald-600/10"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer shadow-md shadow-emerald-600/10"
             >
-              <Send className="h-4 w-4" />
-              <span>Registrasi & Kirim Resmi</span>
+              Simpan & Kirim Resmi
             </button>
           </div>
-
         </div>
       </Modal>
 

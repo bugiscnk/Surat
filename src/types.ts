@@ -2,20 +2,17 @@ export type UserRole = 'Super Admin' | 'Admin Persuratan' | 'Pimpinan' | 'Pelaks
 
 export interface User {
   id: string;
-  nip: string;
   nama: string;
+  nip: string;
+  jabatan: string;
   role: UserRole;
   status: 'Aktif' | 'Nonaktif';
-  jabatan: string;
-  foto?: string;
   password?: string;
+  avatar?: string;
 }
 
-export type SifatSurat = 'Biasa' | 'Penting' | 'Rahasia';
-export type KlasifikasiSurat = 'Umum' | 'Keuangan' | 'Kepegawaian' | 'Akademik';
-
-export type StatusSuratMasuk = 'Draft' | 'Diteruskan' | 'Didisposisikan' | 'Selesai';
-export type StatusSuratKeluar = 'Draft' | 'Dikirim';
+export type SifatSurat = 'Biasa' | 'Penting' | 'Rahasia' | 'Sangat Segera';
+export type KlasifikasiSurat = 'Umum' | 'Keuangan' | 'Kepegawaian' | 'Hukum' | 'Sarpras';
 
 export interface SuratMasuk {
   id: string;
@@ -26,8 +23,9 @@ export interface SuratMasuk {
   perihal: string;
   sifat: SifatSurat;
   klasifikasi: KlasifikasiSurat;
-  status: StatusSuratMasuk;
+  status: 'Draft' | 'Diteruskan' | 'Disposisi' | 'Selesai';
   lampiran?: string;
+  fileUrl?: string; // Berkas fisik surat
 }
 
 export interface SuratKeluar {
@@ -38,41 +36,39 @@ export interface SuratKeluar {
   perihal: string;
   sifat: SifatSurat;
   klasifikasi: KlasifikasiSurat;
-  status: StatusSuratKeluar;
+  status: 'Draft' | 'Dikirim';
   tembusan?: string;
   lampiran?: string;
+  fileUrl?: string; // Berkas fisik surat keluar
 }
-
-export type StatusDisposisi = 'Menunggu' | 'Sedang Dikerjakan' | 'Selesai';
 
 export interface Disposisi {
   id: string;
   suratMasukId: string;
-  pengirimId: string; // ID of Pimpinan
-  pelaksanaIds: string[]; // IDs of Pelaksana
+  pengirimId: string; // ID Pimpinan yang mendisposisikan
+  pelaksanaIds: string[]; // ID Pelaksana penerima disposisi
   instruksi: string;
   tenggatWaktu: string;
-  status: StatusDisposisi;
-  catatanBalasan?: string;
-  dokumenBalasan?: string;
+  status: 'Menunggu' | 'Sedang Dikerjakan' | 'Selesai';
   tanggalDisposisi: string;
+  catatanBalasan?: string;
+  dokumenBalasan?: string; // Berkas laporan hasil tindak lanjut pelaksana
 }
 
 export interface AuditTrail {
   id: string;
-  suratId: string;
-  jenisSurat: 'Masuk' | 'Keluar';
-  tanggal: string;
-  aksi: string;
-  aktor: string;
-  deskripsi: string;
+  timestamp: string;
+  userId: string;
+  namaUser: string;
+  action: string;
+  description: string;
 }
 
 export interface Notifikasi {
   id: string;
-  judul: string;
-  deskripsi: string;
-  tanggal: string;
-  dibaca: boolean;
-  targetRole?: UserRole;
+  userId: string;
+  title: string;
+  message: string;
+  read: boolean;
+  timestamp: string;
 }
