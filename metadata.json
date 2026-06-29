@@ -1,0 +1,6 @@
+{
+  "name": "Sistem Persuratan Digital",
+  "description": "Aplikasi manajemen persuratan digital dengan pelacakan disposisi surat masuk, surat keluar, dan status tindak lanjut.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
